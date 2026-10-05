@@ -1,6 +1,6 @@
 # Archive
 
-Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.3)](<../Collicity — Product Specification (Draft v0.3).md>); its revision history lists what changed between drafts.
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.4)](<../Collicity — Product Specification (Draft v0.4).md>); its revision history lists what changed between drafts.
 
 ## Earlier Collicity drafts
 
@@ -8,6 +8,7 @@ Superseded documents, kept for reference only. The current specification is [Col
 | --- | --- |
 | `Collicity — Product Specification (Draft v0.1)` (.md, .docx) | v0.1 |
 | `Collicity — Product Specification (Draft v0.2)` (.md, .docx) | v0.2; its heading still reads v0.1 |
+| `Collicity — Product Specification (Draft v0.3)` (.md, .docx) | v0.3; its diagrams link to the shared images in `../images/` |
 
 ## Compliance Assistant design plans
 
