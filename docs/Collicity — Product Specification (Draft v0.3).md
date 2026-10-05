@@ -30,7 +30,7 @@ Five rules hold in every edition, client and connector. Each is enforced outside
 1. **Permission ceiling.** Effective permission = the user's own access ∩ scopes the user consented to ∩ capabilities the task declared (action, resources, fields, recipients, parameters) ∩ admin policy, enforced at the connector gateway, never by the model (CON-02).
 2. **No action without authorization.** Every connector action traces to an authorization: the owner's acceptance of the assignment version for its declared reads, and an approval or a still-valid pre-authorization for every side effect (ASG-11, PAY-02, PAY-03).
 3. **No credential reaches a model.** Tokens, keys and secrets never enter prompts, model outputs, logs or third parties (CON-04, SEC-03).
-4. **No AI-cost call without reserved budget.** No model or paid API call starts until its worst-case cost is reserved against the budget (BUD-03).
+4. **No billable operation without reserved budget.** No model call, paid API call, compute or fee starts until its worst-case cost is reserved against every applicable budget (BUD-03, BUD-10).
 5. **Untrusted content cannot expand authority.** Data from connectors, documents, emails or web pages can never add permissions, connectors, recipients, budget or approvals (CON-10).
 
 ## 2. Goals and non-goals
@@ -106,7 +106,7 @@ Everything in Collicity is an assignment made of tasks, started by a trigger, pa
 
 | Concept | Definition | Key attributes |
 | --- | --- | --- |
-| Task | Smallest unit of work an agent performs | Name; description (user- or AI-written); input/output schema; allowed connectors and actions; model or "Auto"; success criteria; approval gate; timeout; retry policy |
+| Task | Smallest unit of work an agent performs | Name; description (user- or AI-written); input/output schema; capability grants (CON-02); model or "Auto"; success criteria; approval gate; timeout; retry policy |
 | Assignment | Named, versioned workflow of tasks: sequence, branches, parallel steps, for-each loops | Owner; task graph; triggers; budgets and alert thresholds; template bindings; sharing |
 | Run | One execution of an assignment, pinned to the version it started on | Status; step log; estimated vs. actual cost; models used; supervisor verdicts; outputs |
 | Trigger | What starts a run | Manual, schedule, event (email, webhook, connector event), proximity (geofence), chained (another assignment finished) |
@@ -116,7 +116,7 @@ Everything in Collicity is an assignment made of tasks, started by a trigger, pa
 | Connector | Governed integration with an external system | Type (MCP, API, knowledge source, device-local, browser); auth method; declared scopes and actions; data classification |
 | Template | Versioned output definition with data bindings | Sections, tables, charts, narrative blocks, style, export formats |
 | Budget | Spending authority on an assignment (and user/org in Enterprise) | AI budget and a separate purchase budget; period; alert thresholds; hard stop |
-| Model performance inventory | The supervisor's record of how each model performs per task type | Success and defect rates, cost per successful task, latency, sample size |
+| Model performance inventory | The supervisor's record of how each model performs per task type | Verified-success rate (INV-06), evidence by class, cost per verified success, latency, sample size |
 
 **Object rules**
 
@@ -163,7 +163,7 @@ A connector can only do what the signed-in user could do themselves, using crede
 | Knowledge (RAG) source | SharePoint, Google Drive, Confluence | Permission-aware retrieval (CON-09) |
 | Device-local | Local files and apps, local MCP servers, Apple HomeKit | Runs only on the user's device |
 | Event source | Mailbox, webhooks, connector change feeds | Feeds triggers (§11) |
-| Browser automation (P2, gated) | Sites with no API | Highest risk; only if approved in §14 |
+| Browser automation (P2, gated) | Sites with no API | Highest risk; only if approved (§21) |
 
 **Proposed launch catalog.** Enterprise: Microsoft 365 (Outlook, SharePoint, Teams, Excel), Google Workspace, Slack, Jira / Confluence, ServiceNow, Splunk, Qualys, Microsoft Intune, CrowdStrike, Salesforce. Home: Gmail / Outlook.com, Google and Apple calendars, Google Home, SmartThings, Home Assistant, Apple HomeKit (on-device), a grocery partner, a food-delivery partner, maps.
 
@@ -175,7 +175,7 @@ The policy check happens before the token broker releases any credential for the
 
 - **CON-01 (P0) Delegated identity only.** Connectors call target systems with tokens issued to the user — OAuth 2.1 authorization code with PKCE, or derived from the user's session via OAuth token exchange (RFC 8693) or the IdP's on-behalf-of flow (e.g., Entra ID OBO). Never with a shared Collicity identity.
 - **CON-02 (P0) Permission ceiling.** Effective permission for any call = the user's own access in the target ∩ scopes the user consented to ∩ capabilities the task declared ∩ admin policy. A capability is more than an action name: it is a connector, action, resource selector, field allowlist, recipient rule, parameter limits and volume limit (table below), so read access to one folder can never grow into a whole mailbox without a visible change. A policy engine (e.g., Cedar or OPA) at the connector gateway checks each request before the call and filters each response to the granted resources and fields after it; the model is never the enforcement point. Connector manifests declare which parameters identify resources and recipients; an action whose resource can't be determined before the call needs approval every time. Widening any element is a new assignment version that needs re-acceptance (RUN-03).
-- **CON-03 (P0) No escalation attempts.** The gateway blocks any action outside the task's declared set and never requests scopes beyond the connector manifest. A denied call (401/403) ends the step; it is never retried with other credentials, scopes or methods. Repeated out-of-policy attempts auto-suspend the task and raise a security event.
+- **CON-03 (P0) No escalation attempts.** The gateway blocks any call outside the task's capability grants (CON-02) and never requests scopes beyond the connector manifest. A denied call (401/403) ends the step; it is never retried with other credentials, scopes or methods. Repeated out-of-policy attempts auto-suspend the task and raise a security event.
 - **CON-04 (P0) Step-scoped grants and upstream tokens.** Collicity's own execution grant is short-lived: the gateway issues it for one step, and it expires when the step ends. Upstream access-token lifetime is set by the target's identity provider and is connector-specific: Microsoft Entra ID defaults to 60–90 minutes, and up to 28 hours for CAE sessions it can revoke in near real time. Upstream tokens therefore stay inside the token broker, are used only for granted calls, and are cut off early through revocation signals such as Continuous Access Evaluation where supported; each connector documents its token lifetime. They are audience-restricted (RFC 8707 resource indicators) and sender-constrained via DPoP (RFC 9449) or mTLS (RFC 8705) where the target supports it. Tokens never reach a model, a log or a third party. Refresh tokens are sealed in an HSM-backed vault with per-tenant keys, rotated, and readable only by the execution service.
 - **CON-05 (P0) Systems without OAuth.** Where a target only takes API keys or basic auth, the user stores their own personal credential in the vault. Admin-approved service accounts are allowed only under an explicit enterprise policy with per-call user attribution, a visible "not user-delegated" badge, and a live entitlement check: before every call, the gateway verifies the named user's current entitlement to the specific resource, through the target's permission API or group membership read from the system of record no more than 15 minutes earlier. If that can't be verified, the call is denied. A documented mapping alone never satisfies the ceiling, and targets with no way to check entitlements can't use the exception. *(Decided 2026-10-05.)*
 - **CON-06 (P0) Continuous verification.** Each call re-checks that the user is still active (IdP / SCIM), session risk signals where the IdP offers them (e.g., Entra Continuous Access Evaluation), device posture for device-bound actions, and that the connector is still approved. Deprovisioning revokes all tokens and pauses runs within 60 seconds.
@@ -198,7 +198,7 @@ The policy check happens before the token broker releases any credential for the
 
 ### 6.3 Custom connectors
 
-- **CON-12 (P0)** Connector SDK (TypeScript and Python) that produces an MCP server with a signed manifest: auth method, scopes, actions (each classed read / write / destructive), data classes, rate limits.
+- **CON-12 (P0)** Connector SDK (TypeScript and Python) that produces an MCP server with a signed manifest: auth method, token lifetime (CON-04), scopes, actions (each classed read / write / destructive), the parameters that identify resources and recipients (CON-02), each write's duplicate-prevention and recovery class (RUN-06, RUN-07), event replay window (RUN-02), cost model (BUD-03), data classes and rate limits. First-party connectors ship the same manifest.
 - **CON-13 (P0)** Three ways in: register a remote MCP server URL, generate from an OpenAPI spec, or describe the API to the AI builder, which scaffolds a connector for human review.
 - **CON-14 (P0)** Custom connector code runs in an isolated sandbox (WASM or microVM) with network egress limited to declared hosts.
 - **CON-15 (P0, Enterprise)** Admin approval before a custom connector is usable by others; versions are pinned, and any scope change requires re-approval.
@@ -208,7 +208,7 @@ The policy check happens before the token broker releases any credential for the
 
 Users reach a runnable assignment two ways — describe it to the AI builder or build it by hand — and both produce the same editable, versioned object with a cost estimate before anything runs.
 
-### 7.1 Your three examples as assignments
+### 7.1 Example assignments
 
 | Example | Trigger | Tasks (H = human step) | Gate |
 | --- | --- | --- | --- |
@@ -248,7 +248,7 @@ Seven behaviors need explicit rules before build. Each has a proposed default th
 - **RUN-01 (P0) Overlapping runs.** Each assignment has a concurrency policy: skip, queue (bounded), replace (cancel the older run at its next safe point) or run concurrently (capped). Defaults: a scheduled trigger skips and notifies when the previous run is still active; per-item event triggers (one email, one webhook) run concurrently up to 5, then queue in order.
 - **RUN-02 (P0) Trigger deduplication.** Every trigger event gets a dedup key — the provider's event or delivery ID, the email Message-ID, or a hash of source and payload — and the key is kept at least as long as the source can redeliver or replay events (declared per connector; default 30 days). Events older than the dedup window are rejected, not run, unless an admin replays them deliberately. This makes run starts once per event; side effects happen once only as far as each action's duplicate prevention allows (RUN-07).
 - **RUN-03 (P0) New versions and future runs.** In-flight runs stay on their version. Future runs use the latest published version unless the owner pins one. If the new version adds connectors, scopes or side-effecting actions, widens any capability (CON-02) or raises the budget, future runs pause until the owner re-accepts it (invariant 2); schedule changes re-run the cost forecast (SCH-02).
-- **RUN-04 (P0) Credentials after waits.** Runs never hold credentials across a wait. Each step obtains a fresh delegated token from the user's current grant at execution time; if the grant was revoked, expired or needs step-up authentication, the run pauses as "needs re-authorization" and notifies the owner. Approvals bind to the exact action and parameters they showed, and expire after 7 days by default. Each approval request also records the version of the item it was based on; if the item changed before the decision, the request goes stale and is re-presented with current and proposed values side by side, so it never overwrites a newer decision. Request states: pending, blocked (e.g., the proposed assignee can't see the sources), invalid (failed a deterministic check; kept for forensics), accepted, rejected, stale.
+- **RUN-04 (P0) Credentials after waits.** Runs never hold credentials across a wait. Each step obtains a fresh delegated token from the user's current grant at execution time; if the grant was revoked, expired or needs step-up authentication, the run moves to Paused: re-authorization (§7.6) and notifies the owner. Approvals bind to the exact action and parameters they showed, and expire after 7 days by default. Each approval request also records the version of the item it was based on; if the item changed before the decision, the request goes stale and is re-presented with current and proposed values side by side, so it never overwrites a newer decision. Request states: pending, blocked (e.g., the proposed assignee can't see the sources), invalid (failed a deterministic check; kept for forensics), accepted, rejected, stale.
 - **RUN-05 (P0) Revocation mid-run.** On revocation the gateway stops new calls at once. A call already sent may complete, since remote calls can't be reliably aborted. Its result is logged as "completed after revocation", quarantined (never passed to later steps, models or other users) and discarded; the run moves to Paused: re-authorization (§7.6), or is cancelled if the user was deprovisioned; any side effect that landed is reported as in RUN-06.
 - **RUN-06 (P0) Failure, compensation and partial side effects.** Every write action declares a recovery class: retryable (idempotent; retried with backoff within budget), compensable (a declared compensating action, e.g., cancel the order, restore the prior field value) or irreversible (e.g., a sent email; needs approval when consequential). The builder warns when an irreversible step comes before steps that can fail and suggests moving it last. Compensations are actions too, so they pass the same gateway, policy and authorization. Every run ends in one named terminal state: Succeeded, Failed (no side effects), Rolled back, Completed with partial side effects, or Cancelled (no side effects applied). Budget exhaustion, revocation and user pauses are resumable pauses, not outcomes (§7.6). The partial state lists each applied effect and opens a repair item in the owner's work queue.
 
@@ -282,7 +282,7 @@ Waiting is part of normal work, a pause needs someone to act, and only terminal 
 
 ## 8. Budgets, cost estimates and alerts
 
-Every assignment has a hard AI budget that cannot be exceeded without the owner's explicit authorization. The guarantee comes from reserving each call's worst-case cost before it is made, not from after-the-fact accounting.
+Every assignment has a hard AI budget that cannot be exceeded without the owner's explicit authorization. The guarantee comes from reserving each billable operation's worst-case cost before it starts, not from after-the-fact accounting.
 
 **What counts as AI cost:** model tokens (input, output, cached) at the provider's price — including router and supervisor calls; paid API calls; sandbox and browser compute; and any platform fee. Purchases are not AI cost; they draw from a separate purchase budget (§14).
 
@@ -312,7 +312,7 @@ m^{*} = \arg\min_{m \in E} \frac{\hat{c}(m)}{p_{\mathrm{LB}}(m, t)} \quad \text{
 
 - Notation: ĉ(m) is the estimated cost of one attempt and q\_t the quality bar; p\_LB(m, t) is the 5th percentile of the Beta posterior over the probability that one attempt by model m on task type t ends in verified success, with the prior set by RTR-07. Example, before any prior: 29 verified successes in 30 attempts (97%) has a lower bound near 86%, while 96% over 50,000 runs has one near 95.9%, so the well-evidenced model wins. Dividing by p\_LB prices in the retries a weaker model will need.
 - **RTR-03 (P0) Cascade.** Optionally start on a cheaper model and escalate when the supervisor's check fails.
-- **RTR-04 (P0) Explainable choices.** Each decision records candidates, scores and a plain-language reason ("Chose model A: 96% success on extraction at $0.004 per run; model B: 97% at $0.03").
+- **RTR-04 (P0) Explainable choices.** Each decision records candidates, scores and a plain-language reason ("Chose model A: lower bound 94% on extraction at $0.004 per attempt; model B: 95% at $0.03").
 - **RTR-05 (P0) Overrides.** Users can pin a model per task; admins can force or forbid models per group or task type.
 - **RTR-06 (P1) Exploration.** A capped share of runs (default ≤5%; off for high-criticality tasks and when an admin disables it) tries other eligible models so new or under-sampled models can earn evidence; lower-bound routing would otherwise starve them. Thompson sampling is one option.
 - **RTR-07 (P0) Prior policy.** One prior policy for every model and task type: a Beta prior whose mean comes from, in order, the previous version of the same model (INV-03), benchmarks mapped to the task type, or 50% if neither exists. Its strength is capped at 10 pseudo-attempts, so real evidence dominates after a few dozen runs. Shadow evaluations count as real evidence only once adjudicated.
@@ -330,10 +330,10 @@ The supervisor records four kinds of evidence separately and combines them only 
 
 - **SUP-01 (P0) Evidence, not verdicts.** Each check writes an evidence record of its class (check ID, result, judge model and version where one was used, hashed inputs) instead of a single pass / fail. Deterministic checks gate delivery: an output that fails one is never delivered as successful. Quotes shown to reviewers are rendered from the stored source snapshot by position, never from the model's text.
 - **SUP-02 (P0)** Deterministic checks run first; a model from a different family than the worker judges grounded and subjective quality where possible. Check depth scales with task criticality; low-criticality tasks are sampled to control cost.
-- **SUP-03 (P0) Interventions, in escalating order:** annotate (flag to the user) → recommend (model, prompt or task change) → retry with feedback → take over (re-run the step on a stronger model) → halt and ask a human. All interventions spend from the same assignment budget and appear on the run timeline.
+- **SUP-03 (P0) Interventions, in escalating order:** annotate (flag to the user) → recommend (model, prompt or task change) → retry with feedback → take over (re-run the step on a stronger model) → pause and ask a human (§7.6). All interventions spend from the same assignment budget and appear on the run timeline.
 - **SUP-04 (P0) Outcome signals.** Acceptance without edits, edit size, ratings, downstream corrections (a reopened ticket, a re-issued report) and reversals attach to the run as outcome evidence, even when they arrive days later.
 - **SUP-05 (P1) Improvement suggestions,** e.g., "Task 3 fails 20% of the time on model X; model Y would add $0.40 per month and fix most failures."
-- **SUP-06 (P0) Independent evaluation set.** A random sample of runs, stratified by task type and criticality, is adjudicated by reviewers who don't see the supervisor's verdict. It is the ground truth for escaped defects, supervisor precision and recall, and unnecessary interventions (§19). Reviewers must be entitled to the data: tenant-designated reviewers in Enterprise, opt-in only in Home.
+- **SUP-06 (P0) Independent evaluation set.** A random sample of runs, stratified by task type and criticality, is adjudicated by reviewers who don't see the supervisor's verdict. It is the ground truth for escaped defects, supervisor precision and recall, and unnecessary interventions (§19). For triage workflows the sample also draws from inputs that never became queue items, stratified by pipeline stage including pre-filter drops (archived AC-15). Reviewers must be entitled to the data: tenant-designated reviewers in Enterprise, opt-in only in Home.
 
 ### 9.3 Model performance inventory
 
@@ -434,12 +434,12 @@ Spending real money is a separate, stricter path than spending AI budget: its ow
 - **PAY-03 (P0) Optional pre-authorization.** The user can allow auto-purchase for one assignment, named merchants and an amount ceiling. Collicity still notifies after each purchase; the pre-authorization expires (default 90 days) and can be revoked anytime.
 - **PAY-04 (P0) No raw card data.** Collicity uses the user's existing merchant account and stored payment method, or tokenized agent-payment rails. Candidates to evaluate: Visa Intelligent Commerce, Mastercard Agent Pay, the Agentic Commerce Protocol (OpenAI and Stripe) and Google's Agent Payments Protocol (AP2). Goal: keep Collicity out of PCI DSS cardholder-data scope.
 - **PAY-05 (P0) Price-change guard.** If the final total exceeds the approved amount by more than a tolerance (default 5%) or breaks any cap, stop and ask again.
-- **PAY-06 (P0) At most one order per approval,** enforced with idempotency keys and duplicate detection.
+- **PAY-06 (P0) At most one order per approval,** enforced through the merchant's idempotency support or read-before-write duplicate detection (RUN-07); with neither, an uncertain outcome needs a fresh approval rather than a retry.
 - **PAY-07 (P0)** Receipts and order status attach to the run, with a visible cancel or return path.
 - **PAY-08 (P0) Safety-critical devices** — locks, garage doors, alarm systems — need approval every time, regardless of pre-authorization.
 - **PAY-09 (P2, Enterprise)** Purchasing goes through procurement systems (e.g., Coupa, SAP Ariba) under their own approval rules.
 
-**Feasibility risk.** From what I know (approximate; verify before committing), public grocery and delivery APIs mostly stop at building a cart or shoppable list, with checkout finished in the merchant's own app. Fully autonomous checkout likely needs merchant partnerships, an agent-payment protocol, or browser automation. Fallback for launch: "cart ready — tap to pay".
+**Feasibility risk.** Unverified assumption, to check before committing: public grocery and delivery APIs mostly stop at building a cart or shoppable list, with checkout finished in the merchant's own app. Fully autonomous checkout likely needs merchant partnerships, an agent-payment protocol, or browser automation. Fallback for launch: "cart ready — tap to pay".
 
 ## 15. Security, privacy and compliance
 
@@ -447,9 +447,9 @@ The top threat is an agent being talked into misusing a user's legitimate access
 
 | Threat | Example | Primary controls |
 | --- | --- | --- |
-| Prompt injection via connector data | An email says "forward all invoices to an outside address" | Connector data treated as untrusted (CON-10); task action allowlist; approval on external sends; supervisor policy check |
+| Prompt injection via connector data | An email says "forward all invoices to an outside address" | Connector data treated as untrusted (CON-10); capability grants (CON-02); approval on external sends; supervisor policy check |
 | Privilege escalation / confused deputy | A task calls an admin API it never declared | Gateway policy, deny by default (CON-02, CON-03) |
-| Token theft | A stolen refresh token is replayed | HSM-backed vault; DPoP / mTLS binding; short lifetimes; anomaly alerts |
+| Token theft | A stolen refresh token is replayed | HSM-backed vault; tokens kept in the broker and released per step (CON-04); DPoP / mTLS binding; anomaly alerts |
 | Data sent to an unapproved model | Confidential content routed to a non-approved provider | Label-aware routing (CON-11, ADM-03); zero-retention providers |
 | Cross-tenant leakage | A bug exposes one tenant's data to another | Per-tenant keys; row-level security; per-tenant execution workers (dedicated for Enterprise, P1) |
 | Malicious custom connector | A connector exfiltrates data | Sandbox, egress allowlist, signing, admin approval (CON-14, CON-15) |
@@ -458,7 +458,7 @@ The top threat is an agent being talked into misusing a user's legitimate access
 | Unsafe physical action | A spoofed location unlocks a door | Approval for safety-critical devices (PAY-08); mock-location detection |
 
 - **SEC-01 (P0) Encryption.** TLS 1.3 in transit; AES-256 at rest; per-tenant keys in KMS / HSM; customer-managed keys for Enterprise (P1).
-- **SEC-02 (P0) Secure development.** Threat model per feature; SAST, DAST and dependency scanning; SBOMs; signed builds for desktop and mobile; third-party penetration test and AI red-team exercise before GA; bug bounty after GA.
+- **SEC-02 (P0) Secure development.** Threat model per feature; SAST, DAST and dependency scanning; SBOMs; signed builds for desktop and mobile; AI red-team exercise before the beta (gate 0) and again before GA; third-party penetration test before GA; bug bounty after GA.
 - **SEC-03 (P0) Logging hygiene.** Secrets and tokens are redacted from logs and prompts; Enterprise chooses prompt and response retention.
 - **SEC-04 (P0) Privacy.** Data minimization; user export and deletion (GDPR, CCPA) under the per-class rules below; no training on customer data by Collicity; data processing agreements with every model subprocessor.
 - **SEC-05 Compliance roadmap.** SOC 2 Type I at Enterprise GA and Type II within 12 months; ISO/IEC 27001; GDPR from day one. Later, if the market calls for them: HIPAA BAA, ISO/IEC 42001 (AI management), FedRAMP. Track EU AI Act transparency duties for AI systems that interact with people.
@@ -524,12 +524,12 @@ Enterprise GA needs every requirement in the matrix's Beta and GA columns, not e
 | Area | Beta (Phases 0–1) | Enterprise GA (Phase 2) | Home (Phase 3) | Later |
 | --- | --- | --- | --- | --- |
 | Platforms (§5) | PLT-01 web only; PLT-06 | PLT-01 desktop and mobile; PLT-02; PLT-03 approvals; PLT-05 | PLT-03 payment biometrics; PLT-04 | — |
-| Connectors (§6) | CON-01–04, 06–10; CON-05 only if a partner needs it; Graph plus at most 2 partner connectors | CON-11–15; enterprise launch catalog | Consumer catalog | CON-16 |
-| Tasks and runtime (§7) | ASG-01, 02, 04–06, 09–16; RUN-01–07 | ASG-03, 07, 08 | — | — |
+| Connectors (§6) | CON-01–04, 06–10; CON-05 only if a partner needs it; Graph plus at most 2 partner connectors, each with a full CON-12 manifest | CON-11–15; enterprise launch catalog | Consumer catalog | CON-16 |
+| Tasks and runtime (§7) | ASG-01, 02, 04–06, 09–15, with every action approved (no pre-authorization before gate 1); RUN-01–07 | ASG-03, 07, 08, 16 | — | — |
 | Budgets (§8) | BUD-01–05, 08, 10; BUD-06 without groups | BUD-06 groups; BUD-07, 09 | Account cap | — |
 | Router, supervisor, inventory (§9) | RTR-01–05, 07; SUP-01–04, 06; INV-01–03, 06, 07 | RTR-06; SUP-05; INV-04 | — | INV-05 |
 | Templates (§10) | — | TPL-01–07 | — | TPL-08, 09 |
-| Scheduling and triggers (§11) | SCH-03 mail events; SCH-06 | SCH-01, 02, 07, 08 | SCH-04, 05 | — |
+| Scheduling and triggers (§11) | SCH-03 mail events | SCH-01, 02, 07, 08 | SCH-04–06 | — |
 | Q&A and chat (§12) | QA-01–03 | QA-04–06 | QA-07 | — |
 | Admin and providers (§13) | ADM-01–03, 05, 07; ADM-06 without SIEM export; PRV-01, 03, 05; PRV-02 only for a partner's own cloud | ADM-04, 08; ADM-06 SIEM export; PRV-02, 04 | Consumer sign-in | Local models |
 | Payments (§14) | — | — | PAY-01–08 | PAY-09 |
@@ -616,7 +616,7 @@ Leading indicators show within weeks whether the core loop works. Quality metric
 | Connector calls beyond the user's permission ceiling (invariant 1) | Guardrail | 0 | Gateway + audit log |
 | Side effects, including purchases, without valid authorization (invariant 2) | Guardrail | 0 | Audit log + payment records |
 | Credentials found in prompts, outputs or logs (invariant 3) | Guardrail | 0 | Secret scanning of stored prompts and logs |
-| AI-cost calls started without a reservation, or budget overruns without authorization (invariant 4) | Guardrail | 0 | Budget ledger reconciliation |
+| Billable operations started without a reservation, or budget overruns without authorization (invariant 4) | Guardrail | 0 | Budget ledger reconciliation |
 | Injection test cases that expanded authority (invariant 5) | Guardrail | 0 | Release-gating red-team suite |
 
 ## 20. Key risks
@@ -626,9 +626,9 @@ Scope is the largest risk: six platforms, two editions and real-money purchases 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Scope: six platforms × two editions × payments | Slow launch, thin quality | Phase by edition and capability; one UI codebase; execution centralized in the cloud |
-| Prompt injection causes a harmful action | Security incident, loss of trust | §15 controls; approvals default on; red-team before GA |
+| Prompt injection causes a harmful action | Security incident, loss of trust | §15 controls; approvals default on; red-team before the beta and before GA |
 | Merchants don't allow agent checkout | Meal-plan purchase step blocked | Partner early; launch with "cart ready — tap to pay" |
-| Key target systems lack delegated auth | Weakens the "user's own permissions" promise | Personal credentials (CON-05); publish a per-connector attribution matrix |
+| Key target systems lack delegated auth | Weakens the "user's own permissions" promise | Personal credentials or live entitlement checks (CON-05); publish a per-connector attribution matrix |
 | Sparse routing data early on | Poor model choices, higher cost | Benchmark priors; conservative quality bars; capped exploration |
 | Model and price churn | Wrong estimates, stale inventory | Versioned price catalog; per-version inventory records |
 | OS limits on background location | Late or missed proximity actions | Cooldowns, missed-trigger policy, visible trigger health |
@@ -648,7 +648,7 @@ Scoping decisions through the beta contract are made. The first remaining blocke
 - **Purchasing:** approve each purchase by default; opt-in, capped pre-authorization per assignment and merchant (PAY-02, PAY-03).
 - **Systems without OAuth:** personal credentials in the vault; admin-governed service accounts as a badged exception with live entitlement checks (CON-05).
 - **Stack defaults:** the compliance assistant plan v3 stack (§5, §16); only the mobile stack remains open.
-- **Prior work:** the compliance assistant plans v1–v3.1 and their acceptance cases are archived under `docs/archive/` in the collicity folder. Compliance is one customer vertical of Collicity; their sync semantics, measurement method and acceptance cases are reusable for any email- or chat-triggered workflow, starting with the beta.
+- **Prior work:** the compliance assistant plans v1–v3.1 and their acceptance cases are archived under `docs/archive/` in the collicity repository. Compliance is one customer vertical of Collicity; their sync semantics, measurement method and acceptance cases are reusable for any email- or chat-triggered workflow, starting with the beta.
 
 **Open**
 
@@ -674,7 +674,7 @@ Scoping decisions through the beta contract are made. The first remaining blocke
 
 | Version | Date | Changes |
 | --- | --- | --- |
-| v0.3 | 2026-10-05 | Second review: capability grants and live entitlement checks (CON-02, CON-05); step-scoped grants vs. upstream token lifetime (CON-04); duplicate prevention and uncertain outcomes (RUN-07); run states (§7.6); reservations for every billable operation, atomic across levels, with increase authority (BUD-03, BUD-04, BUD-10); one prior policy, success label and attribution (RTR-07, INV-06, INV-07); published snapshots (SEC-10); requirement matrix, exit gates and beta contract (§18); missed-request metrics (§19) |
+| v0.3 | 2026-10-05 | Second review: capability grants and live entitlement checks (CON-02, CON-05); step-scoped grants vs. upstream token lifetime (CON-04); duplicate prevention and uncertain outcomes (RUN-07); run states (§7.6); reservations for every billable operation, atomic across levels, with increase authority (BUD-03, BUD-04, BUD-10); one prior policy, success label and attribution (RTR-07, INV-06, INV-07); published snapshots (SEC-10); requirement matrix, exit gates and beta contract (§18); missed-request metrics (§19); a consistency pass across sections |
 | v0.2 | 2026-10-05 | First review: product invariants, runtime semantics, evidence classes and lower-bound routing, data classes, evaluation set; fixes ported from the archived compliance plans; stack defaults; beta workflow default |
 | v0.1 | 2026-10-05 | First draft |
 
