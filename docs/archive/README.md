@@ -1,14 +1,22 @@
-# Archive: Compliance Assistant design plans
+# Archive
 
-**Status:** superseded on 2026-10-05 by the Collicity product specification:
-https://claude.ai/code/artifact/8762acb1-2d81-41e4-b799-1f2706510c18
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.3)](<../Collicity — Product Specification (Draft v0.3).md>); its revision history lists what changed between drafts.
 
-Collicity is the broader platform: autonomous worker agents for day-to-day tasks. The compliance assistant is one customer vertical of it. These files are kept as reference, not as live specs.
+## Earlier Collicity drafts
 
-## What was carried into the Collicity spec
+| Files | Version |
+| --- | --- |
+| `Collicity — Product Specification (Draft v0.1)` (.md, .docx) | v0.1 |
+| `Collicity — Product Specification (Draft v0.2)` (.md, .docx) | v0.2; its heading still reads v0.1 |
+
+## Compliance Assistant design plans
+
+Superseded on 2026-10-05 by the Collicity specification. Collicity is the broader platform: autonomous worker agents for day-to-day tasks. The compliance assistant is one customer vertical of it.
+
+### What was carried into the Collicity spec
 
 - Mail authentication is not sender identity; identity confidence levels (ASG-15)
-- Sharing beyond source access is an explicit, logged publish (QA-03)
+- Sharing beyond source access is an explicit, logged act, now a published snapshot (QA-03, SEC-10)
 - Visibility follows the sources and is enforced at every exit, including prompt assembly and client caches (SEC-08)
 - Discarded and evaluation-set items are retained 90 days so missed items can be measured (§15 data classes)
 - Citation integrity (deterministic) is separate from semantic support (probabilistic); quotes come from snapshots (§9.2, SUP-01)
@@ -16,12 +24,13 @@ Collicity is the broader platform: autonomous worker agents for day-to-day tasks
 - Approval requests record their base version and go stale (RUN-04)
 - Database tenant-isolation details (SEC-09)
 - The v3 technology stack as Collicity's default (§5, §16)
+- The release 1 acceptance cases, adopted into the beta gate (§18.1)
 
-## Still worth reusing
+### Still worth reusing
 
 For any email- or chat-triggered Collicity workflow, starting with the beta (email request triage → approved actions), whose intake follows this design: ingestion semantics (dedup keys with scope, capture-before-checkpoint, cursor-expiry recovery, sync gaps), the stratified recall and adjudicated precision method, authority predicates, the suppression floor, and the acceptance cases.
 
-## Reading order
+### Reading order
 
 Each version lists only its changes from the one before, so the latest state is spread across files.
 
