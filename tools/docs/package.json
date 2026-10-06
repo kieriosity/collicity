@@ -1,0 +1,14 @@
+{
+  "name": "collicity-docs-tools",
+  "private": true,
+  "description": "Builds the Collicity docs: Markdown to .docx, and SVG diagram sources to PNG",
+  "scripts": {
+    "docx": "node md2docx.js",
+    "png": "node svg2png.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "docx": "9.8.1",
+    "marked": "18.1.0"
+  }
+}
