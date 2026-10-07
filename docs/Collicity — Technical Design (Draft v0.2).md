@@ -1,10 +1,10 @@
-# Collicity — Technical Design (Draft v0.1)
+# Collicity — Technical Design (Draft v0.2)
 
-Oct 5, 2026 · Draft for engineering review · Companion to *Collicity — Product Specification (Draft v0.4)*
+Oct 5, 2026 · Draft for engineering review · Companion to *Collicity — Product Specification (Draft v0.5)*
 
 ## 1. Overview
 
-This document turns the product specification (v0.4) into a system that can be built. It sets out:
+This document turns the product specification (v0.5) into a system that can be built. It sets out:
 
 - the stack;
 - the architecture;
@@ -19,7 +19,7 @@ GA and Home are outlined at coarser grain. Requirement IDs refer to the specific
 | --- | --- | --- |
 | Cloud | AWS; one region for the beta, chosen by where the design partners need their data | Managed services throughout; US and EU cells at GA |
 | Team | 1–3 engineers through the beta | Three services and one sandbox. Buy everything that isn't the product; defer whatever the beta matrix doesn't require |
-| Scope | Every requirement in the §18 matrix's Beta column (81 IDs); GA and Home outlined | Every Beta requirement maps to a work package (§14) |
+| Scope | Every requirement in the §18 matrix's Beta column (82 IDs); GA and Home outlined | Every Beta requirement maps to a work package (§14) |
 
 **Design principles**
 
@@ -31,20 +31,20 @@ GA and Home are outlined at coarser grain. Requirement IDs refer to the specific
 
 ## 2. Stack
 
-The specification's stack defaults (§5, §16) came from the archived compliance-assistant plan v3. Most stay. Several change because something fits a three-person team on AWS better, and several are deferred because the beta doesn't need them.
+Spec v0.4's stack defaults came from the archived compliance-assistant plan v3. Most stay. Several change because something fits a three-person team on AWS better, and several are deferred because the beta doesn't need them. Spec v0.5 adopts these decisions (§5, §16).
 
-| Layer | Spec default | Decision | Reason |
+| Layer | Default in spec v0.4 | Decision | Reason |
 | --- | --- | --- | --- |
 | Compute | Kubernetes + Terraform | **Change:** ECS on Fargate + Terraform; EKS Auto Mode only if self-hosted delivery is ever needed | Three services don't justify running a cluster. Per-task IAM roles and security groups are the trust boundaries |
-| Untrusted-code sandbox | WASM or microVM (CON-14) | **Decide:** Firecracker microVMs. Beta: a Lambda with no network access for content extraction. GA: Fargate tasks behind a proxy that injects credentials on the way out, for custom connectors | Managed isolation without running gVisor. The connector SDKs are TypeScript and Python, which WASM serves poorly |
+| Untrusted-code sandbox | WASM or microVM (CON-14) | **Decide:** Firecracker microVMs. Beta: a Lambda with no internet access (an S3 endpoint only) for content extraction. GA: Fargate tasks behind a proxy that injects credentials on the way out, for custom connectors | Managed isolation without running gVisor. The connector SDKs are TypeScript and Python, which WASM serves poorly |
 | Backend | Python 3.12, FastAPI, Pydantic v2 | **Keep**, on Python 3.13 (3.14 during GA), with SQLAlchemy 2, psycopg 3 and Alembic; no PgBouncer in the beta | Strongest ecosystem for model SDKs, document parsing and statistics. Pydantic models double as structured-output schemas. 3.13 is supported to October 2029 |
 | Orchestrator | Temporal | **Keep:** Temporal Cloud over AWS PrivateLink, running short run segments (§4). DBOS is the fallback | Nothing to operate. Short segments remove workflow-versioning risk and dual writes |
 | Database | PostgreSQL 16 with RLS | **Change:** Aurora PostgreSQL on the newest major version Aurora supports (17; 18 once available), Serverless v2 outside production; RLS as SEC-09 specifies | Commits are durable across three Availability Zones, which gives the audit log RPO 0 if a zone fails |
 | Live updates | Postgres outbox + Redis 7 | **Change for the beta:** no message broker. The outbox feeds Server-Sent Events, with Postgres LISTEN/NOTIFY as the wake-up. Valkey (ElastiCache Serverless) at GA if load needs it | One fewer system; SSE's `Last-Event-ID` is the outbox sequence |
-| Object storage | S3-compatible | **Keep:** S3 with SSE-KMS; Object Lock (compliance mode) for audit anchors | — |
+| Object storage | S3-compatible | **Keep:** S3 with SSE-KMS under the tenant's `content` key (each write names it; S3 Bucket Keys limit KMS calls); Object Lock (compliance mode) for audit anchors | — |
 | Vector store | pgvector or dedicated | **Defer** to GA (pgvector) | Beta retrieval is live federated search with the user's token (CON-09) |
 | Policy engine | Cedar or OPA (CON-02) | **Change:** in the beta, a typed, deterministic grant evaluator in the gateway. Cedar arrives at GA with policies as code (ADM-08), custom connectors (CON-15) and the edge executor, tested against the beta evaluator on the same cases | The beta's grants are a small, closed rule set; property-based tests prove it more directly than policies would |
-| Secrets vault | KMS/HSM-backed vault (CON-04) | **Decide:** KMS envelope encryption with ciphertexts in a `vault` schema. One key per purpose and region, with the tenant in the encryption context. Secrets Manager for service secrets; XKS or CloudHSM for customer-managed keys at GA | No Vault cluster to run. Per-person audit keys (SEC-07) are wrapped data keys, not 100,000 KMS keys |
+| Secrets vault | KMS/HSM-backed vault (CON-04) | **Decide:** KMS envelope encryption with ciphertexts in a `vault` schema. A KMS key per tenant for each purpose that holds tenant data (SEC-01): `credential` (the vault: connector tokens, CON-05 credentials and BYO provider keys), `audit` (wraps per-person keys and encrypts the tenant's audit archives) and `content` (S3 snapshots, payloads, prompts and outputs). The tenant is also in the encryption context. KMS rotates these keys automatically; customer-managed keys at GA (XKS or CloudHSM) rotate under the customer's control. Aurora is encrypted under its cluster key, and rows are isolated by row-level security (SEC-09; spec §21 asks whether rows need tenant keys too). Secrets Manager for service secrets; XKS or CloudHSM for customer-managed keys at GA | No Vault cluster to run. Per-tenant keys make customer-managed keys a key swap at GA for the data they cover. Per-person audit keys (SEC-07) are wrapped data keys, not 100,000 KMS keys |
 | Sign-in | Hosted OIDC/SAML service | **Decide:** WorkOS for SSO, Directory Sync (SCIM) and its Admin Portal; AuthKit for consumer sign-in and passkeys in Home | Enterprise SSO and SCIM are beta-critical and commodity |
 | Connector authorization | — | **Decide:** the token broker runs its own OAuth 2.1 consent per connector (authorization code with PKCE). The Entra application authenticates with client assertions signed by a KMS key that can't be exported. MSAL is configured for continuous access evaluation (CAE) | Sign-in tokens can't be exchanged for on-behalf-of tokens. Collicity's own application credential never leaves the HSM |
 | Model providers | One hosted provider + bring-your-own | **Decide:** Claude through Claude Platform on AWS, signed with SigV4 from the gateway's task role, so no static key exists; token counting, Batches and `inference_geo` are available. A second model family on Bedrock judges across families, chosen by evaluation | Invariant 3 holds for the default provider by construction, with full Claude API parity inside AWS |
@@ -72,7 +72,7 @@ A refusal (`stop_reason: refusal`) counts as a failed attempt for that model (IN
 
 Clients never call target systems or model providers. Everything leaves through the gateway, the one service that holds credentials and can reach the internet. The services that touch untrusted content hold no credentials.
 
-![Architecture · one gateway holds every credential and makes every external call](images/tech-architecture.png)
+![Architecture · one gateway holds every credential and makes every external call](images/tech-architecture-v0.2.png)
 
 ### 3.1 Deployables
 
@@ -83,7 +83,7 @@ Clients never call target systems or model providers. Everything leaves through 
 | `gateway` | ECS behind NAT and an AWS Network Firewall domain allowlist: connector adapters, token broker, grant evaluator, model adapter, compute adapter, write-ahead audit | `gw`: the only role that can decrypt token keys with KMS, invoke Claude Platform on AWS, Bedrock and `extract`, or reach the internet | The single structural enforcement point for invariants 1–4 |
 | `extract` | Lambda in a VPC with no internet route, S3 gateway endpoint only | None | The CON-10 sandbox. Only the gateway invokes it, after reserving its compute (BUD-03) |
 
-Static assets are served from S3 through CloudFront. Temporal Cloud stores only identifiers, enums and error codes (§4.1), encoded with one KMS-backed codec key.
+Static assets are served from S3 through CloudFront. Temporal Cloud stores only identifiers, enums and error codes (§4.1), encoded with one platform KMS key, since Temporal holds no tenant content.
 
 **Network tiers**
 
@@ -98,6 +98,7 @@ Static assets are served from S3 through CloudFront. Temporal Cloud stores only 
 - Add the EU cell; identifiers and hostnames are region-aware from day one.
 - Add the Rust edge executor for the desktop and the on-prem relay.
 - Add Cedar.
+- Add dedicated worker pools for Enterprise tenants that require them (the spec's per-tenant execution workers, P1).
 
 ### 3.2 Request paths
 
@@ -115,14 +116,14 @@ Static assets are served from S3 through CloudFront. Temporal Cloud stores only 
 4. It prepends a cache salt, HMAC(tenant, visibility set). Provider caches are scoped to Collicity's own workspace or organization, not to a tenant, so the salt keeps cached prefixes from ever matching across visibility groups (SEC-08).
 5. It marks the reservation *started*, calls the provider, and settles to the actual cost from the response's usage.
 
-**Read call** (invariants 1 and 5)
+**Read call** (invariants 1, 4 and 5)
 
 1. The worker presents an opaque step grant. It is a database row for one step and attempt (CON-04), valid only while the tenant, user, assignment and run *epochs* it recorded are current.
-2. The gateway re-checks the user, the session and the connector (CON-06). It validates parameters against the pinned manifest, resolves resource parameters to stable IDs, and evaluates the capability grant (§5.2).
+2. The gateway re-checks the user, the session and the connector (CON-06). It validates parameters against the pinned manifest, resolves resource parameters to stable IDs, and evaluates the capability grant (§5.2). A paid action also needs the caller's reservation (§5.1, BUD-03).
 3. The broker supplies the user's token, and the adapter calls the target with the CON-07 `User-Agent`.
 4. The response is filtered to granted resources and fields and stored in S3 under its data class. It comes back to the worker as a *content handle* carrying its source IDs and an `untrusted` taint (§8.2). An audit record is written.
 
-**Write action** (invariants 1, 2 and 5)
+**Write action** (invariants 1, 2, 4 and 5)
 
 1. A model drafts a structured proposal. Before it is stored, deterministic checks run:
    - the schema;
@@ -132,9 +133,9 @@ Static assets are served from S3 through CloudFront. Temporal Cloud stores only 
 2. The proposal becomes an approval request. Its canonical hash (JSON Canonicalization Scheme, RFC 8785) binds the action, the resource IDs, the parameters, the item's base revision, the target's version and the declared compensation (§5.4). The request expires after 7 days (RUN-04).
 3. A person approves. A delegate must pass the item's visibility check (SEC-08).
 4. An action run calls the gateway. In **one transaction**, the gateway:
-   - consumes the approval;
+   - consumes the approval, or for a compensation checks that the original effect was applied and not yet reversed (§5.4);
    - inserts the effect row with a unique idempotency key;
-   - increments the volume counter;
+   - increments the volume counter (compensations don't count) and marks a paid action's reservation started;
    - writes the audit *intent* record.
 
    Only then does the broker release the token.
@@ -142,7 +143,7 @@ Static assets are served from S3 through CloudFront. Temporal Cloud stores only 
 
 **Mail to runs** (§11)
 
-1. A Graph change notification wakes the scope's intake workflow, which reads the per-folder delta using immutable IDs.
+1. A Graph change notification wakes the intake workflow of each assignment or instance that watches the scope; each reads the per-folder delta under its owner's token (CON-01), using immutable IDs.
 2. Capture follows the archived compliance plan v3.1 §7: snapshot bytes to S3, then one transaction for the source rows and outbox events, then advance the checkpoint.
 3. The gateway invokes `extract` to normalize the content (CON-10).
 4. A trigger evaluator that reads only headers, and so costs no model calls, resolves sender identity (ASG-15) and applies the per-sender counter (ASG-17).
@@ -170,36 +171,65 @@ Postgres owns every run's state. Temporal executes short segments between waits,
   - pauses older than 14 days, which take the cancel path;
   - unsettled reservations;
   - INV-06 outcome windows.
-- **Kill switch (ASG-13).** Pausing or suspending bumps an epoch. The gateway refuses new calls for that scope within seconds, and any live segment is cancelled; thousands of workflows never need a signal.
+- **Kill switch (ASG-13).** Pausing a run, a user's runs or all runs bumps the run, user or tenant epoch. The gateway refuses new calls for that scope within seconds, and any live segment is cancelled; thousands of workflows never need a signal. Suspending a user is different: it deprovisions them (§5.6).
 - **Temporal payloads.** Only identifiers, enums and error codes. Inputs, outputs and prompts are claim-checked: stored in S3 under their data class (spec §15) and referenced by ID.
 
 ### 4.2 Email triage as runs
 
 - **Intake run, one per email:** triage → extract the requested items with citations → find the targets through gateway reads → draft action proposals → supervisor checks (§7.2) → persist queue items and approval requests. The run ends there, so RUN-01's default of 5 concurrent runs per assignment stays meaningful.
 - **Action run, one per approved action.** Its trigger dedup key is the approval ID, so each approval executes at most once.
-- **Long human waits** live in the work queue. Generic human steps (ASG-10) use the same park-and-resume mechanism. In the beta they sit only on the main sequence, never inside parallel branches or loops.
+- **Long human waits** live in the work queue. Generic human steps (ASG-10) use the same park-and-resume mechanism. Inside a parallel branch or a for-each loop, a branch or item that reaches a human step runs as a child run with its own state and segments, so waits still end segments; the parent waits for its children.
 
 ### 4.3 Runtime semantics
 
 | Rule | Implementation |
 | --- | --- |
-| RUN-01 Overlapping runs | Admission locks `assignment_slots`. Only Queued and Running runs count (proposed spec change 5). Policies: skip; queue (bounded, first in first out); replace (the older run is cancelled at its next step boundary); concurrent (capped) |
-| RUN-02 Trigger deduplication | `trigger_event.dedup_key` is unique, with an expiry. The mail key is (tenant, mailbox, Graph immutable message ID), with a window at least as long as the 90-day monitored window (proposed spec change 6). The same key derives the workflow ID |
-| RUN-03 New versions | Admission resolves the latest or pinned version. A version that isn't accepted and either widens any grant element (§5.2) or raises the budget → Paused: re-acceptance |
+| RUN-01 Overlapping runs | Admission locks `assignment_slots`. Only Queued and Running runs count against the cap and the queue bound. A run that has executed a step resumes without waiting for a slot; one that paused before its first step returns to Queued in trigger order, and the policy applies to it as to a new trigger. Policies: skip; queue (bounded, first in first out); replace (the older run is cancelled at its next step boundary); concurrent (capped) |
+| RUN-02 Trigger deduplication | `trigger_event.dedup_key` is unique, with an expiry. The mail key is (tenant, assignment or instance, mailbox, Graph immutable message ID), never the Message-ID the sender chooses, with a window at least as long as the 90-day monitored window. The same key derives the workflow ID |
+| RUN-03 New versions | Admission resolves the latest or pinned version. A version that isn't accepted and either widens any grant element (§5.2) or raises the budget → Paused: re-acceptance; accepting it returns those runs to Queued in trigger order (RUN-01). An instance of a shared assignment runs only the version its recipient accepted (ASG-23) |
 | RUN-04 Credentials after waits | The broker fetches a token on every call. Approvals bind by canonical hash, expire after 7 days (state `expired`), and go stale when either base version changes |
 | RUN-05 Revocation mid-run | Epochs are checked on every call. A result that lands after revocation is quarantined and never returned. The run moves to Paused: re-authorization, or takes the cancel path if the user was deprovisioned |
 | RUN-06 Failure and compensation | An effect journal records every applied effect. Retryable steps retry within budget. Otherwise compensations run in reverse order through the gateway, ending Rolled back. Any failed compensation or irreversible effect ends Completed with partial side effects, with a repair item |
 | RUN-07 Duplicate prevention | Classes (a) and (b) retry safely. Class (c) waits out the declared read-after-write lag, finds the object by correlation ID, then retries or records the result. Class (d) never retries: Paused: outcome unknown, with a repair item |
 
-If an owner is deprovisioned after effects were applied, there is no delegated token left to compensate with. The run ends Completed with partial side effects, and the repair item goes to a custodian the tenant designates (proposed spec change 9).
+If an owner is deprovisioned after effects were applied, there is no delegated token left to compensate with. The run ends Completed with partial side effects, and its open repair items go to a custodian the tenant designates (RUN-06). A custodian's repair item rests only on the applied effects and their target resources, not on the run's sources, so it stays within SEC-08: the custodian sees it if they can read those targets. For an outcome-unknown write, the item shows only the action, target, account, attempt time and correlation ID. Items no custodian can see are flagged to tenant admins with identifiers only (RUN-06).
 
 ### 4.4 Versions and the builder
 
 - **Immutable versions (ASG-01).** Assignments and tasks are versioned. A version is accepted only through `accept_version()` (§8.2). The acceptance screen shows the widening diff and the provenance of every standing instruction.
 - **Manual builder (ASG-04).** An outline editor with steps, branches, parallel blocks and for-each blocks. Task forms cover the description, capability grants (with resource pickers backed by gateway reads), the model or "Auto", success criteria, approval gate, timeout and retry.
-- **"Write this for me" and "Improve" (ASG-02)** draft a description that the person must accept. They are charged to the user's workspace account (§6.1).
+- **"Write this for me" and "Improve" (ASG-02)** draft a description that the person must accept. They are charged to the person's workspace budget (BUD-11, §6.1).
 - **Dry run (ASG-05)** runs the version with read-only grants. Write capabilities are stripped before step grants are issued. It reports what would happen and its real token cost.
 - **Success criteria (ASG-06)** are chosen from the typed check library (§7.2) with parameters. Free-text criteria become subjective checks for the judge.
+
+### 4.5 Sharing (GA)
+
+Spec §7.7 gives two ways to share, and neither lends anyone the owner's access. In the beta, reports are shared as one-off snapshots; assignment sharing and recurring report sharing arrive at GA.
+
+- **Report sharing (ASG-19)** reuses snapshots (SEC-10). A `report_share` row holds the assignment version, the recipients (people or groups), the source scopes and label ceiling the owner confirmed, and a state (active, held, withdrawn). For each new edition, a publish activity checks:
+  - the edition comes from the confirmed version, and every source in its lineage lies within the confirmed scopes;
+  - its label is no higher than the confirmed edition's and needs no second approver;
+  - the supervisor didn't flag it and SEC-13 screening found nothing;
+  - each recipient, including each current group member, meets SEC-10's recipient rules;
+  - the owner can still read every source and holds the Publisher permission.
+
+  If all hold, it publishes the snapshot. Otherwise it holds the edition and asks the owner to confirm again; if the owner has lost access to a source, nothing publishes until they regain it.
+- **Instances (ASG-20).** Sharing with named people creates an `assignment_instance` for each; a group or tenant share creates one only when a member opens the offer, with SCIM group events driving joins and leaves.
+  - Each instance has its recipient as owner and a state: offered, blocked (something missing), active, or ended with a reason (withdrawn, declined, left, archived).
+  - It records the version its recipient accepted and any newer version on offer, its own resolutions of personal selectors, its triggers (mail triggers on the recipient's resolved folders; webhook triggers with their own endpoint and secret) and an assignment budget under the recipient's user budget.
+  - Admission (RUN-01) starts runs only for an active instance, on its accepted version. Every run, approval, step grant and audit record carries the instance owner, so the gateway always sees the recipient as the principal. A pre-authorization applies only to the instance it was made for.
+- **Acceptance and versions (ASG-23).** `accept_version()` records acceptance per instance, by its owner only. A new version is recorded as an offer and changes nothing until the recipient accepts it on a screen that shows the diff of instructions, capabilities and provenance against the version the recipient last accepted, never against the previous published version; a version that widens anything beyond the accepted version re-runs the whole precheck first. The acceptance screen hides the names of resources and sources the recipient can't read, and the share screen shows the owner what recipients will see.
+- **Access precheck (ASG-21)** has two stages.
+  - At share time, Collicity checks its own records for each recipient: role, admin policy for each connector and action, model eligibility (the pinned model or, on Auto, the curated default, against the recipient's own policy and configured providers) and budget headroom.
+  - When the recipient opens the share, they connect any missing connector. Each connector's access check then runs under the recipient's own token and reads only their access to the declared resources; for Graph, that is a metadata read of each resource as the recipient, and write access is verified where the target offers an effective-permission check and is otherwise unverifiable.
+  - Results are stored per requirement with the principal that ran them, always the recipient, and shown to the owner only for resources the owner can read. A denied check is recorded as a result, never as an out-of-policy call (CON-03).
+  - After acceptance, a dry run the recipient starts settles unverifiable reads, charged to their workspace budget; the instance's triggers start only when it passes.
+- **Access requests (ASG-22)** are `access_request` rows: route, recipient, resource, operation, the person it was filed as and approved by, state (open, granted, rejected, expired, stale, withdrawn) and a 7-day expiry.
+  - Policy, budget and consent requests stay inside Collicity.
+  - An IT-queue ticket runs as a one-step run of a built-in access-request assignment under the requester's identity, with a fixed grant the tenant admin sets (one ticketing connector, one queue, allowlisted fields, a per-person daily limit). It takes the normal write path (§5.1) with the requester's approval of the exact ticket, and is charged to the requester's workspace budget.
+  - Collicity never changes a target's permissions. It re-runs the precheck when a grant lands, withdraws requests when a share ends, and tells granters when the access is no longer needed.
+- **Intake per instance.** Each instance's mail trigger has its own intake workflow under its owner's token, and its dedup keys include the instance (RUN-02). At acceptance, if another instance of the same assignment already watches the same fixed mailbox, the screen says so and offers a delegate role (§18.1) or a report share instead.
+- **Ending (ASG-23).** Withdrawing a report share stops its editions. Withdrawing an assignment share, a recipient leaving, or the assignment being archived disables the instance's triggers and admission; runs already started finish their current step and end through RUN-06. Version rows stay while any instance's run is pinned to them. Admins can pause every instance of one assignment through its epoch (ASG-13).
 
 ## 5. Connector gateway
 
@@ -209,20 +239,20 @@ The gateway decides whether a call is inside the permission ceiling before any c
 
 ### 5.1 Request path
 
-1. **Load the step grant.** Check that the run is Running, its version is accepted, the user is active with current epochs, and the connector is still approved (CON-06). These are read from Postgres, cached for at most 5 seconds and invalidated by LISTEN.
+1. **Load the step grant.** Check that the run is Running, its version is accepted by the run's owner (for an instance, by its recipient), the user is active with current epochs, and the connector is still approved (CON-06). These are read from Postgres, cached for at most 5 seconds and invalidated by LISTEN.
 2. **Validate parameters** against the pinned manifest, and identify the resource and recipient parameters. An action whose resource can't be determined before the call needs approval every time (CON-02).
-3. **Evaluate the grant** (§5.2), denying by default. A denial writes a `denied` audit record and ends the step. Repeated denials suspend the task and raise a security event (CON-03).
+3. **Evaluate the grant** (§5.2), denying by default. A denial writes a `denied` audit record and ends the step. Repeated denials suspend the task and raise a security event (CON-03). Then check the action's cost model in the pinned manifest (BUD-03): an action without one is refused, and a paid action needs the caller's reservation, which the gateway checks against its own worst case at the recorded price version and marks started just before the call (inside the step-4 transaction for a write).
 4. **For a write, one transaction:**
-   - consume the approval (accepted, unexpired, hash match, unused);
+   - consume the approval (accepted, unexpired, hash match, unused); for a compensation, check instead that the original effect was applied and not yet reversed, since its approval may already be used or expired (invariant 2);
    - insert the effect row (unique idempotency key);
-   - increment the volume counter, only if `used + n ≤ limit`;
+   - increment the volume counter, only if `used + n ≤ limit` (compensations don't count, CON-02);
    - write the audit intent.
-5. **Release the token.** The broker unwraps the refresh token with KMS (tenant in the encryption context) and refreshes it with the CAE capability. The access token stays in memory only.
+5. **Release the token.** The broker unwraps the refresh token with the tenant's `credential` key and refreshes it with the CAE capability. The access token stays in memory only.
 6. **Make the call.**
    - A 401 or 403 ends the step, with no retry.
    - A CAE claims challenge moves the run to Paused: re-authorization.
    - A timeout or lost acknowledgement is handled by the action's RUN-07 class.
-7. **Filter and record.** The response is filtered to granted resources and fields, the payload goes to S3 with its lineage, and the audit result and effect outcome are written.
+7. **Filter and record.** The response is filtered to granted resources and fields, the payload goes to S3 with its lineage, and the audit result and effect outcome are written. A paid call's reservation settles to the target's reported charge; if the outcome is unknown (RUN-07), it stays started and is charged in full (§6.2).
 8. **Revocation** bumps an epoch, and new calls stop at once. A call already in flight is logged "completed after revocation" and quarantined (RUN-05).
 
 ### 5.2 Capability grants
@@ -242,7 +272,7 @@ Each element of CON-02 has a typed form:
 | Parameter limits | Bounds per field (e.g., a change of at most 50 units); forbidden operations | Before the call |
 | Volume limit | A count per run or per period | Atomic counter in the write transaction |
 
-- **Stable IDs.** Selectors resolve to the target's immutable identifiers when a version is accepted, so renaming a workbook or folder can never widen a grant. If a selector's resolution changes, that is a new version (RUN-03).
+- **Stable IDs.** Selectors resolve to the target's immutable identifiers when a version is accepted, so renaming a workbook or folder can never widen a grant. If a fixed selector's resolution changes, that is a new version (RUN-03). A personal selector resolves per instance when its recipient accepts (ASG-20), and `widens()` compares an instance's resolutions only with its own earlier ones.
 - **Widening.** `widens(old, new)` is a subset check on each element. Any widening needs re-acceptance (RUN-03, invariant 2).
 - **Typed writes.** Text written to Excel or SharePoint is escaped so it can't become a formula; `=WEBSERVICE(…)` or `=HYPERLINK(…)` would send data out. Number fields accept only numbers.
 - **Reply drafts.** Graph's reply drafts may follow a Reply-To header that the sender controls. The adapter therefore sets `toRecipients` explicitly from the authenticated From address, and reads the draft back to verify its recipients before recording success. Spike S3 confirms the behavior.
@@ -250,15 +280,15 @@ Each element of CON-02 has a typed form:
 ### 5.3 Tokens and attribution
 
 - **Consent (CON-01, CON-08).** Each connector uses OAuth 2.1 authorization code with PKCE, and scopes never exceed the manifest. At consent, the upstream tenant and object IDs (`tid`, `oid`) must match the signed-in person's SSO subject, or the connection is rejected; nobody can connect someone else's account.
-- **Sealing (CON-04).** Refresh tokens are encrypted with KMS envelope encryption (purpose `connector-token`, tenant in the encryption context) and stored in the `vault` schema. Only the gateway's task role can decrypt them (proposed spec change 1). Access tokens live in memory, are restricted to their audience, and are never logged. DPoP or mTLS binding is added for targets that support it; none of the beta targets does.
+- **Sealing (CON-04).** Refresh tokens are encrypted with KMS envelope encryption (the tenant's `credential` key, with the tenant also in the encryption context) and stored in the `vault` schema. Only the gateway's task role can decrypt them (CON-04). Each refresh seals the new refresh token the identity provider returns and destroys the old ciphertext. Access tokens live in memory, are restricted to their audience, and are never logged. DPoP or mTLS binding is added for targets that support it; none of the beta targets does.
 - **Attribution (CON-07).** Every call carries `User-Agent: Collicity/<version> (agent; run=<run-id>)`, the `act` claim where the target supports token exchange, and an audit record. Each connector's documentation states what the target's own log will show.
 - **Systems without OAuth (CON-05)** are built only if a design partner needs them. Personal credentials are sealed the same way.
 
 ### 5.4 Approvals and compensations
 
-- **Compensation.** The approval hash covers the action and its **declared compensation, with exact restore values** (for example, restore Qty to 10). A compensation therefore runs under the approval that authorized the original action, needs no model, and can't be blocked by budget (proposed spec change 8).
-- **Request states:** pending, blocked, invalid, accepted, rejected, stale and **expired** (proposed spec change 7).
-- **Delegates.** A delegate's approval executes with the queue owner's token. The delegate must pass the item's visibility check, and both people are recorded (proposed spec change 14).
+- **Compensation.** The approval hash covers the action and its **declared compensation, with exact restore values** (for example, restore Qty to 10). A pre-authorization (GA) covers the declared compensation, and the restore values are recorded when the action runs. Either way the compensation runs under the original authorization, even after it was used, expired or was revoked (invariant 2, RUN-06); it needs no model. A paid write's reservation also covers its declared compensation's worst case, so a compensation never waits for budget; that part is released when the run ends without needing it (BUD-03). The write's grant also covers its declared compensation, only to reverse an effect the run applied and outside the volume limit (CON-02).
+- **Request states:** pending, blocked, invalid, accepted, rejected, stale and **expired**, when the expiry passes before the request is decided or its action runs (RUN-04).
+- **Delegates.** A delegate's approval executes with the queue owner's token. The delegate must pass the item's visibility check, and the audit record names the queue owner as the user and the delegate as the approver (CON-07, §18.1).
 
 ### 5.5 Beta actions
 
@@ -271,7 +301,7 @@ Each element of CON-02 has a typed form:
 
 ### 5.6 Deprovisioning (CON-06)
 
-1. A WorkOS directory event, or an admin suspension, commits one transaction:
+1. A deprovisioning signal (a WorkOS directory event, an admin suspension, or a disabled account found by the optional directory poll) commits one transaction:
    - the person is suspended and their epoch bumped;
    - their grants and connections are revoked;
    - their runs are paused or routed down RUN-06.
@@ -281,8 +311,8 @@ Each element of CON-02 has a typed form:
 Measured from the identity provider, 60 seconds is out of reach through SCIM alone. Microsoft Entra provisions on a cycle of about 40 minutes, and CAE critical events can take up to 15 minutes to propagate. The design therefore:
 
 - measures from receipt of the signal;
-- uses CAE, so Graph rejects a disabled user's tokens;
-- can add admin-consented polling of Graph's user delta where a tenant needs the tighter bound (proposed spec change 3).
+- uses CAE, so Graph rejects a disabled user's tokens even before the signal arrives; a CAE challenge on its own only moves the run to Paused: re-authorization, because it doesn't say why access changed;
+- lets a tenant allow admin-consented polling of Graph's user delta at least every 30 seconds, under an application permission the tenant admin grants; each disabled account it finds is a deprovisioning signal (CON-06).
 
 ## 6. Budgets and ledger
 
@@ -293,9 +323,9 @@ Every billable operation reserves its worst case before it starts, against every
 - **Accounts:**
   - organization, user and assignment, per period (BUD-01; BUD-06 without groups in the beta);
   - the run itself, for the per-run cap;
-  - a **user workspace account** for spending outside runs: Q&A (QA-01–03), "Write this for me" (ASG-02) and dry runs (ASG-05) (proposed spec change 4).
+  - a **workspace budget** (BUD-11) for work not charged to an assignment: Q&A (QA-01–03), "Write this for me" (ASG-02) and dry runs (ASG-05). It sits under the user budget, or the account cap in Home; from GA, chat has its own budget at the same level (QA-04, BUD-11).
 - **Money** is stored as integer micro-USD, and each reservation records its price-catalog version (BUD-08).
-- **Lock order.** Rows are always locked in the same rank order: organization, group (GA), user, assignment, run.
+- **Lock order.** Rows are always locked in the same rank order: organization, group (GA), user, assignment, workspace or chat (GA), run.
 
 ### 6.2 Reserve, start, settle, expire
 
@@ -314,7 +344,7 @@ INSERT INTO ledger_entry (...);
 | State | Meaning | On expiry |
 | --- | --- | --- |
 | active | Reserved, not yet dispatched | Released |
-| started | The gateway is about to dispatch, or has | Charged in full, then reconciled against provider usage (proposed spec change 2) |
+| started | The gateway is about to dispatch, or has | Charged in full, then reconciled against provider usage where the provider reports it (BUD-03) |
 | settled | Actual cost recorded | — |
 
 - **Overruns.** An actual cost above its reservation is a guardrail event, because it means the cost model is wrong.
@@ -329,7 +359,7 @@ INSERT INTO ledger_entry (...);
 ### 6.3 Authorization and alerts
 
 - **Paused runs (BUD-04).** A paused run shows what was spent, what remains, the blocking account and the estimate to finish. Only that account's controller can raise it, either once or permanently. Each raise is recorded as a `limit_change` row and audited; nothing increases automatically.
-- **Alerts (BUD-05).** Thresholds fire once per period per account, in-app and by email in the beta. Defaults: notify at 50%, 80% and 95%; pause at 100%.
+- **Alerts (BUD-05).** Thresholds fire once per period per account, in-app, by email and by browser push in the beta, and to Slack, Teams or webhooks through incoming-webhook URLs that the gateway calls (allowlisted hosts). Defaults: notify at 50%, 80% and 95%; pause at 100%.
 - **Scale path.** One reservation holds its row locks for well under a millisecond, which is enough for hundreds of reservations a second on one organization row; spike S5 measures it. If contention appears: pre-allocated budget chunks per user, or TigerBeetle behind the same interface.
 
 ## 7. Models: router, supervisor, inventory
@@ -343,14 +373,15 @@ The router starts every task type on a curated default and moves to cheaper mode
 - **Fallback.**
   - With priors capped at 10 pseudo-attempts, a strong prior of 0.9 is Beta(9, 1), whose 5th percentile is about 0.72.
   - A model therefore needs roughly 20 consecutive verified successes to clear a 0.9 bar, and more from a 0.5 prior.
-  - Until one clears the bar, each task type uses a **curated default model with full supervision**. This is the beta's "rule-based router" (proposed spec change 10).
+  - Until one clears the bar, each task type uses a **curated default model with full supervision** (every check runs on every attempt, SUP-02). This is the beta's "rule-based router" (RTR-02).
+  - If the default isn't eligible for a task (RTR-01), the fallback is the eligible unit with the highest lower bound, ties going to the lower estimated cost. With no eligible unit, the step fails before any model call, and the decision record says which condition excluded each model (RTR-04).
 - **Records.** Each decision records its candidates, scores and a plain-language reason (RTR-04). Overrides follow RTR-05. Exploration (RTR-06) is GA.
 
 ### 7.2 Supervisor (SUP-01 to SUP-04)
 
 - **Deterministic checks** come from a typed check library, selected by each task's success criteria (ASG-06): schema, row counts, totals, referenced IDs exist, citation integrity, not hidden-only. They run first and gate delivery.
-- **Judging.** A judge from a different model family checks grounding. Subjective checks are sampled according to criticality.
-- **Interventions** follow SUP-03's ladder. Each spends from the assignment budget and appears on the run timeline.
+- **Judging.** A judge from a different model family checks grounding. Subjective checks are sampled according to criticality, except under the RTR-02 fallback, where every check runs on every attempt (SUP-02).
+- **Interventions** follow SUP-03's ladder. Each spends from the budget of the work it checks (the assignment budget, or the workspace budget for a dry run; SUP-03, BUD-11) and appears on the run timeline.
 - **Evidence.** Every check writes an append-only evidence record: class, check ID, result, judge model and version, and input hashes.
 
 ### 7.3 Inventory and evaluation (INV-01–03, 06, 07; SUP-06)
@@ -367,7 +398,7 @@ The router starts every task type on a curated default and moves to cheaper mode
 
 ## 8. Untrusted content, lineage and rendering
 
-Untrusted content is normalized before a model sees it and tracked through everything derived from it. It is rendered so that it can't fetch anything (v0.4: CON-10, SEC-11, SEC-12, ASG-17).
+Untrusted content is normalized before a model sees it and tracked through everything derived from it. It is rendered so that it can't fetch anything (spec v0.4's hardening: CON-10, SEC-11, SEC-12, ASG-17).
 
 ### 8.1 Normalization (CON-10)
 
@@ -380,7 +411,7 @@ The `untrusted` library runs only inside `extract`. It returns a *model view*, a
 | DOCX | Hidden (vanish) text; comments; tracked deletions; metadata |
 | PDF | Invisible render mode; text coloured like its background; text outside the page; metadata |
 
-- **Unicode.** Text is normalized with NFKC, keeping the offset map. Tag characters and bidirectional controls are stripped and flagged. Mixed-script look-alikes are mapped to their UTS #39 skeleton and flagged (proposed spec change 13).
+- **Unicode.** Text is normalized with NFKC, keeping the offset map. Tag characters and bidirectional controls are stripped and flagged. Mixed-script look-alikes are mapped to their UTS #39 skeleton and flagged (CON-10).
 - **Encoded payloads.** Base64, hex and URL-encoded runs are decoded, with a depth limit, for inspection. In the model view they are replaced by a flagged placeholder.
 - **Hidden regions** never enter the model view. Reviewers see them with a "hidden in original" marker, and quotes are rendered from the snapshot by offset (SUP-01).
 - **Prompt delimiters.** Delimiting and labeling untrusted text in prompts is hygiene only, not a control.
@@ -397,7 +428,7 @@ The `untrusted` library runs only inside `extract`. It returns a *model view*, a
 ### 8.3 Rendering (SEC-11)
 
 - **Sanitizing.** The server sanitizes model output to an allow-listed Markdown tree, and the React renderer never emits remote images, frames or forms.
-- **Links** show their true host. Links to domains outside the tenant's allowlist open through an interstitial; the allowlist is a new admin setting (proposed spec change 18).
+- **Links** show their true host. Links to domains outside the tenant's allowlist open through an interstitial; the allowlist is a tenant setting that admins manage (SEC-11).
 - **Defense in depth,** so that even a sanitizer bug can't fetch anything:
   - `Content-Security-Policy: default-src 'self'; img-src 'self' blob: data:; frame-src 'none'; form-action 'self'; base-uri 'none'`;
   - Trusted Types;
@@ -439,15 +470,16 @@ Every connector call is audited twice: once as intent, before any token is relea
 
 - **Storage.**
   - An `audit` schema on the same Aurora cluster. Every role gets INSERT only, and a trigger rejects UPDATE and DELETE.
-  - Aurora's three-zone durability gives RPO 0 if a zone fails. Losing the whole region is a GA disaster-recovery item (proposed spec change 12).
+  - Aurora's three-zone durability gives RPO 0 if a zone fails. Losing the whole region is a GA disaster-recovery item (spec §17).
 - **Contents.** Identifiers and hashes only, never payloads or prompt text (SEC-07):
   - intent and result for every connector call;
   - denials and approvals;
   - budget authorizations;
   - admin changes and version acceptances;
   - revocations;
-  - snapshot events.
-- **Personal fields** are encrypted with per-person data keys, which are themselves wrapped by the tenant key. Search uses blind indexes (keyed HMACs). Crypto-shredding deletes the wrapped key, and is complete once backups older than the deletion expire.
+  - snapshot events;
+  - share events: offers, acceptances, declines, withdrawals, departures, precheck results and access requests.
+- **Personal fields** are encrypted with per-person data keys, which are themselves wrapped by the tenant's `audit` key. Search uses blind indexes (keyed hashes, HMAC), stored per person outside the hash chain. Crypto-shredding deletes the wrapped key and the person's blind-index entries; the chain still verifies, and erasure is complete once backups older than the deletion expire (SEC-07).
 - **Hash chain (ADM-07).**
   - The sealer appends `(tenant, chain_seq, record_id, prev_hash, hash)` over the encrypted fields.
   - Every hour a KMS-signed chain head is written to S3 under Object Lock.
@@ -461,12 +493,12 @@ The beta's intake reuses the archived compliance-assistant plan v3.1 design; thi
 
 | v3.1 concept | Collicity |
 | --- | --- |
-| `source_object`, `source_version`, deduplicated on (tenant, connector, scope, source_id, version) | Same tables. The version is a hash of the normalized message, because Graph's change key changes when mail is read or flagged. IDs come from `Prefer: IdType="ImmutableId"` |
-| Capture before checkpoint, outbox, 410 resync, reconciliation, sync gaps | One intake workflow per scope: notifications only wake it, and the delta query does the reading. Daily reconciliation also refreshes `current_acl` |
+| `source_object`, `source_version`, deduplicated on (tenant, connector, scope, source_id, version) | Same tables. The version is a hash of the normalized message, because Graph's change key changes when mail is read or flagged. IDs come from `Prefer: IdType="ImmutableId"`. Copies of a message in more than one scope are matched by a hash of the normalized message, sender and sent time, never by the sender-chosen Internet Message-ID that v3.1 used as `content_identity` (RUN-02, §18.1) |
+| Capture before checkpoint, outbox, 410 resync, reconciliation, sync gaps | One intake workflow per scope and per assignment or instance, under its owner's token: notifications only wake it, and the delta query does the reading. Daily reconciliation also refreshes `current_acl` |
 | `mail_auth`, `sender_identity`, identity confidence | Only the Authentication-Results header stamped by the tenant's own Microsoft 365 boundary is trusted. ASG-15 levels apply. Low-confidence mail goes to the review lane and never triggers a run |
 | Deterministic pre-filter, suppression floor | The header-only trigger evaluator (monitored folder, sender rule, ASG-17 counter). The floor forces human review |
 | Triage → synthesis | The intake run (§4.2) |
-| Obligation | `queue_item`, with the §18.1 lifecycle. `assignment_status` and `repair_status` are separate fields, as in v3.1 (proposed spec change 11) |
+| Obligation | `queue_item`, with the §18.1 lifecycle. `assignment_status` and `repair_status` are separate fields; v3.1 already kept assignment status apart (§18.1) |
 | Proposal states | `approval_request`, with v3.1's states plus `expired` and a new `action` kind |
 | `content_flags` | The model view excludes hidden regions and stripped characters; reviewers see markers |
 | Stage-outcome strata, 90-day retention | The SUP-06 sampler, including pre-filter drops |
@@ -483,8 +515,8 @@ Supported beta inputs follow §18.1:
 | Area | Tables | Columns that carry the invariants |
 | --- | --- | --- |
 | Tenancy and identity | `tenant`, `principal`, `group`, `role_grant` | `home_region`; `principal.status`, `kind` (person or service), `epoch`, `idp_subject` |
-| Standing instructions | `assignment`, `assignment_version`, `version_acceptance` | Immutable task graph, grants, budgets, manifest pins, content hash, taint; `accepted_by` (a person); widening diff |
-| Connectors | `connector_manifest`, `connection`, `vault.token`, `step_grant`, `capability_usage` | Signed manifest (action classes, recovery and duplicate-prevention classes, resource parameters, cost model, replay window, hosts); bound `tid`/`oid` and consented scopes; ciphertext readable only by `gw`; grant expiry and epochs; `used ≤ limit` |
+| Standing instructions | `assignment`, `assignment_version`, `version_acceptance` | Immutable task graph, grants, budgets, manifest pins, content hash, taint; `accepted_by` (a person; per instance for a shared assignment, and always its owner); widening diff |
+| Connectors | `connector_manifest`, `connection`, `vault.token`, `step_grant`, `capability_usage` | Signed manifest (action classes, recovery and duplicate-prevention classes, resource parameters, cost model, replay window, hosts, access check); bound `tid`/`oid` and consented scopes; ciphertext readable only by `gw`; grant expiry and epochs; `used ≤ limit` |
 | Execution | `run`, `run_step`, `trigger_event`, `effect`, `repair_item` | `state`, `state_version`, `segment_no`, `continuation`, `price_version`; unique dedup key with expiry; unique idempotency key, `params_hash`, class, outcome (sending, applied, unknown, failed, compensated), prior values |
 | Approvals | `approval_request` | Canonical parameters and hash; both base versions; bound compensation; visibility set; state (including `expired`); `expires_at`; `consumed_at` |
 | Intake and queue | `source_object`, `source_version`, `scope_sync`, `sync_gap`, `queue_item`, `evidence_link`, `review_decision`, `sender_counter` | `current_acl`; identity confidence, content flags, references to the model view and offset map, stage outcome; item status, `assignment_status`, `repair_status`, approved fields, revisions |
@@ -492,6 +524,7 @@ Supported beta inputs follow §18.1:
 | Budget | `ledger_account`, `reservation`, `ledger_entry`, `limit_change`, `price_version` | Limit, spent, reserved, lock rank, alerts sent; reservation state |
 | Models and quality | `model_catalog`, `router_decision`, `model_call`, `evidence_record`, `attempt`, `adjudication` | Provider terms (retention, zero data retention, region); labels provisional until the outcome window closes |
 | Audit and outbox | `audit.record`, `audit.seal`, `audit.anchor`, `person_key`, `outbox_event` | INSERT-only; chain hashes; sequence assigned at publish; visibility set |
+| Sharing (GA) | `report_share`, `assignment_share`, `assignment_instance`, `access_check`, `access_request` | Report share: version, recipients, source scopes, label ceiling, state (active, held, withdrawn). Instance: owner is the recipient; state (offered, blocked, active, ended with a reason); accepted and offered versions; personal-selector resolutions; triggers with their own webhook endpoint and secret; budget account. Access check: requirement, result, the principal that ran it (always the recipient). Access request: route, filed as, approved by, state, expiry, the version scope it applies to |
 
 **Retention and deletion (SEC-04).** Retention jobs enforce the spec's §15 data-class table:
 
@@ -550,9 +583,9 @@ Buy everything that isn't the product, build the enforcement and runtime core th
 | --- | --- | --- | --- | --- |
 | P0.1 | Terraform with three egress tiers; CI and SEC-02 scanning; database roles and RLS (SEC-09); WorkOS SSO and SCIM (ADM-01); SEC-01, SEC-03 | A | 4–5 | Two tenants sign in; cross-tenant and wrong-role tests pass |
 | P0.2 | Spikes S1–S8 (§14.4) | All | 3–4 | Spike memos; each beta action's duplicate-prevention and recovery class confirmed |
-| P0.3 | Fake Graph (mail, delta, 410, Excel, lists, drafts), fake ticketing and external receivers, all with fault injection | B | 3 | Every RUN-07 failure mode can be triggered |
-| P0.4 | Price catalog and ledger (BUD-01, 03, 08, 10; BUD-06 without groups); model adapter (PRV-01, 03, 05; PRV-02 only for a partner's own cloud) | A | 4 | A call without a reservation is refused; concurrency property tests pass |
-| P0.5 | Connector adapters with full CON-12 manifests; broker with account binding (CON-01, 04, 08); grant evaluator (CON-02, 03); CON-06, 07; effect journal; write-ahead audit and sealer (ADM-07, SEC-07); CON-05 only if a partner needs it | B | 7–8 | Red-team cases for every grant element pass; the chain still verifies after crypto-shredding |
+| P0.3 | Fake Graph (mail, delta, 410, Excel, lists, drafts), fake ticketing with one paid action, and external receivers, all with fault injection | B | 3 | Every RUN-07 failure mode can be triggered |
+| P0.4 | Price catalog and ledger (BUD-01, 03, 08, 10, 11; BUD-06 without groups); model adapter (PRV-01, 03, 05; PRV-02 only for a partner's own cloud) | A | 4 | A call without a reservation is refused; concurrency property tests pass |
+| P0.5 | Connector adapters with full CON-12 manifests; broker with account binding (CON-01, 04, 08); grant evaluator (CON-02, 03); CON-06, 07; effect journal; write-ahead audit and sealer (ADM-07, SEC-07); CON-05 only if a partner needs it | B | 7–8 | Red-team cases for every grant element pass; an action without a cost model is refused; the chain still verifies after crypto-shredding |
 | P0.6 | `extract` and `untrusted` (CON-10) | C | 3–4 | 100% of the CON-10 corpus flagged |
 | P0.7 | Run engine: segments, §7.6 states, ASG-09–11, 13; RUN-01–07; epochs; deprovisioning | A | 6–7 | Fault injection: 0 duplicates for classes (a)–(c). After deprovisioning: no calls within 10 s; runs paused within 60 s |
 | P0.8 | Web shell (PLT-01 web, PLT-06): React Aria design system, approval card, run timeline (ASG-12), SSE resync, SEC-11 renderer and CSP | C | 4–5 | An action approved end to end; a poisoned item makes 0 cross-origin requests |
@@ -623,6 +656,7 @@ These are rough estimates, to be recalibrated after the spikes (P0.2):
   - the posture-report connectors (Qualys, Splunk, Intune).
 - **Product:**
   - ASG-03, 07, 08 and 16;
+  - sharing (ASG-18–23, §4.5): recurring report shares, per-recipient instances, the access precheck and access requests;
   - BUD-06 groups, 07 and 09;
   - RTR-06, SUP-05, INV-04 and SEC-13;
   - TPL-01–07, using Vega-Lite charts and exports rendered with no network access;
@@ -649,12 +683,13 @@ Each invariant has its own automated suite that must pass at zero violations; to
 | Suite | What it asserts | How |
 | --- | --- | --- |
 | Invariant 1: permission ceiling | Every out-of-policy call is denied before any token is released, for every grant element; responses are filtered; nothing is retried after a 401 or 403 | Hypothesis generates in-bounds and out-of-bounds pairs against the fakes. The broker's log shows no token for a denied call. Honeytokens in fields that weren't granted never appear downstream |
-| Invariant 2: authorization | Every side effect in the fakes' logs joins to an approval with a matching hash. Changed, expired, stale and replayed approvals are denied | Mutation tests; a nightly production join of audit records to approvals that must find 0 orphans |
+| Invariant 2: authorization | Every side effect in the fakes' logs joins to an approval with a matching hash. Changed, expired, stale and replayed approvals are denied, except a compensation of an applied, unreversed effect, which runs under its original approval; compensating an effect that wasn't applied, or compensating it twice, is denied | Mutation tests; a nightly production join of audit records to approvals, checking both the hash and that the approver is the token's user or a delegate they named, that must find 0 orphans |
 | Invariant 3: credentials | No canary token appears in prompts, outputs, logs, traces, Temporal payloads, the database or S3 | Canary tokens issued by a fake identity provider; a fingerprint scanner; IAM and network tests showing `worker` can't decrypt tokens or reach the internet |
-| Invariant 4: budget | Nothing billable runs without a reservation; no limit is exceeded under concurrency, crashes or expiry | Hypothesis stateful tests on Postgres. Every operation billed by the fake providers or the sandbox must join to a reservation. Daily reconciliation against provider usage in production |
+| Invariant 4: budget | Nothing billable runs without a reservation; no limit is exceeded under concurrency, crashes or expiry | Hypothesis stateful tests on Postgres. Every operation billed by the fake model providers, the sandbox or a fake paid connector action (reads, writes and compensations) must join to a reservation, and an action with no declared cost model is refused. Daily reconciliation against provider usage in production |
 | Invariant 5 and SEC-02 | 100% of injection cases blocked; no honeytoken leaves the test sandbox; nothing written to standing instructions | A maintained suite (below) |
 | RUN-07 | 0 duplicates for classes (a)–(c); class (d) pauses | Fakes for each class with faults: lost acknowledgement, timeout before and after commit, crash after sending, read-after-write lag |
 | SEC-11 and SEC-12 | 0 cross-origin requests when rendering or exporting; taint propagates; writes from `worker` are denied | Playwright with a network recorder; formula-escaping tests; database permission tests |
+| Sharing (GA) | A recipient's runs, prechecks and dry runs use only the recipient's tokens and budgets; every run's version was accepted by its owner for its instance; a request filed in a target was approved by the person it was filed as; precheck results reach the owner only for resources the owner can read; an edition with a source outside the confirmed scopes is held | Fixtures with two people and two instances; red-team cases for bait-and-switch versions, probing undeclared resources and request abuse |
 
 **The injection suite (invariant 5, SEC-02)**
 
@@ -665,12 +700,12 @@ Each invariant has its own automated suite that must pass at zero violations; to
 **Acceptance cases and gate evidence**
 
 - AC-01–21 (with AC-10 and AC-14 as written in the v3 file) become Given/When/Then pytest scenarios over the fakes with a scripted model. AC-10, 12 and 13 also run in Playwright.
-- The new cases for the action half and for v0.4 become AC-22 to AC-32:
+- The new cases for the action half and for spec v0.4's hardening become AC-22 to AC-32:
   - capability violation;
   - lost acknowledgement for each action type;
   - compensation and partial side effects;
   - budget pause and resume;
-  - stale approval;
+  - stale and expired approvals;
   - revocation mid-run;
   - snapshot withdrawal;
   - SEC-11 and SEC-12;
@@ -700,41 +735,49 @@ The riskiest assumptions are tested in the first three weeks (§14.4); each has 
 | Cost estimates miss ±25% | Gate 1 metric missed; needless pauses | Spike S7; `max_tokens` set from p99 output; dry runs; a safety multiplier |
 | A weak cross-family judge | Low supervisor precision or recall | Choose by labeled-set evaluation; a curated default with full supervision |
 | The gateway is a single point of compromise | Credentials and egress sit together | Narrow IAM and KMS policies; Network Firewall allowlist; split the broker out at GA |
+| Per-tenant KMS keys at Home scale (Phase 3) | A KMS key costs $1 a month, plus $1 a month for each of its first two rotations; three purpose keys per account cost $3–9 a month, or $300,000–900,000 a month for 100,000 Home accounts | Before Home, revisit SEC-01's per-tenant keys for Home accounts: one key per account with the purpose in the encryption context, or per-account data keys under shared KMS keys |
 | A team of 1–3 engineers | Schedule slips | Buy list; scope levers; lanes merge when the team is smaller |
 | WebKitGTK behavior in Tauri (GA) | Desktop parity or accessibility | One-week spike at the start of Phase 2; Electron fallback |
 
-## 17. Proposed spec changes
+## 17. Spec changes adopted in v0.5
 
-These are listed for the product owner; this document doesn't edit the specification.
+The product owner approved the 18 changes this document proposed. Spec v0.5 adopts them, refined in an independent review, together with the knock-on edits they needed.
 
-1. **CON-04.** Refresh tokens should be readable only by the token broker in the connector gateway (§16), not by "the execution service".
-2. **BUD-03.** Expiry releases only reservations that never started. A reservation that started but wasn't settled is charged in full and reconciled.
-3. **CON-06, §17.** Measure the 60 seconds from receipt of the deprovisioning signal. Entra SCIM runs about every 40 minutes and CAE can take up to 15 minutes, so add CAE. Decide whether admin-consented Graph user-delta polling is acceptable under CON-01.
-4. **Spending outside runs in the beta** (QA-01–03, ASG-02, ASG-05). Charge a user workspace account, since the chat budget arrives with QA-04 at GA.
-5. **RUN-01.** Only Queued and Running runs count against the concurrency limit; otherwise runs waiting days for approval would stall intake.
-6. **RUN-02.** The email Message-ID is chosen by the sender, so a forged ID can suppress a real email. Use the provider's immutable ID, with a dedup window at least as long as the 90-day monitored window.
-7. **RUN-04.** Add an `expired` approval state.
-8. **Invariant 2.** Each approval also covers its declared compensation, so compensations are authorized.
-9. **Deprovisioned owner with applied effects.** A tenant-designated custodian receives the repair item, and the run ends Completed with partial side effects.
-10. **RTR-02.** Specify the fallback when no model clears the quality bar: a curated default with full supervision.
-11. **§18.1.** "Needs reassignment" and "Needs repair" should be separate status fields, as in v3.1, not lifecycle states.
-12. **ADM-07 and SEC-07.** State three things: personal fields are searched through blind indexes; crypto-shredding completes once older backups expire; and audit RPO 0 covers losing a zone, not a region.
-13. **CON-10.** Define "removed" for look-alike characters (map them to their UTS #39 skeleton), and state that hidden regions stay out of the model view.
-14. **Delegate approvals.** They execute with the queue owner's token. Confirm this, and require the approver to pass SEC-08 with both people recorded.
-15. **CON-02.** In the beta the policy engine is a typed, deterministic evaluator; Cedar arrives at GA.
-16. **§6.1.** First-party connectors run in-process in the beta; MCP transport is used at the edges.
-17. **§5, §16, §21.** Update the stack lines to match §2 of this document once accepted.
-18. **SEC-11.** Add a tenant setting for the link-domain allowlist.
+| # | Change | Where it landed in spec v0.5 |
+| --- | --- | --- |
+| 1 | Refresh tokens are readable only by the token broker in the connector gateway | CON-04 |
+| 2 | At expiry, a reservation that may have started is charged in full, then reconciled where the provider reports usage | BUD-03; note under the §7.6 table |
+| 3 | The deprovisioning bound runs from receipt of the signal; CAE rejects tokens at the target, and a CAE challenge alone means re-authorization; tenants can allow admin-consented directory polling | CON-06; §17 Revocation row |
+| 4 | A workspace budget pays for work charged neither to an assignment nor to chat: Q&A, "Write this for me" and dry runs; from GA, chat has its own budget beside it | New BUD-11; BUD-06, BUD-10, ADM-02, QA-04, SUP-03, §4, §8, §13, §18 matrix |
+| 5 | Only Queued and Running runs count against the concurrency cap and queue bound; runs that have executed a step resume without a slot, and runs paused before their first step return to Queued | RUN-01; §7.6 |
+| 6 | Mail is deduplicated by its immutable message ID, never the sender-chosen Message-ID; copies in several scopes are matched by content hash | RUN-02; §18.1 intake |
+| 7 | An `expired` approval state | RUN-04; §18.1 acceptance cases |
+| 8 | Approvals and pre-authorizations cover declared compensations, even after use, expiry or revocation; a write's grant covers its compensation | Invariant 2; RUN-06; CON-02 |
+| 9 | When the owner is deprovisioned after effects were applied, the run ends Completed with partial side effects, and a tenant-designated custodian receives its repair items, which rest on the effects and targets (SEC-08); items no custodian can see are flagged to tenant admins | RUN-05 and §7.6 (terminal state); RUN-06, ADM-01 and §18.1 roles (custodian and flag) |
+| 10 | A curated default with full supervision while no model clears the quality bar | RTR-02; SUP-02; §9 lead |
+| 11 | Assignment and repair status are fields beside the lifecycle | §18.1 lifecycle |
+| 12 | Blind indexes for search; crypto-shredding also deletes a person's index entries and completes once older backups expire; audit RPO 0 covers losing a zone | ADM-07; SEC-07; §17 Durability row |
+| 13 | Look-alikes map to their UTS #39 skeleton; hidden regions stay out of the model view | CON-10 |
+| 14 | A delegate's approval runs with the queue owner's token, and the audit record names both people | CON-07 (approver field); §18.1 roles |
+| 15 | A typed grant evaluator in the beta; Cedar from GA | CON-02; §16 |
+| 16 | First-party connectors run in-process in the beta; MCP at the edges | §6.1 |
+| 17 | The decided cloud, stack and team | §5; §16 building blocks and redrawn reference architecture; §20; §21 |
+| 18 | A tenant setting for the link-domain allowlist | SEC-11 |
+
+CON-14 is unchanged: its "WASM or microVM" already allows the microVM sandboxes that §16 now records.
+
+Spec v0.5 also records the product owner's decision on sharing (§7.7, ASG-18 to ASG-23, at GA); §4.5 designs it.
 
 ## Revision history
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| v0.2 | 2026-10-05 | Updated for spec v0.5, which adopts this document's 18 proposed changes: §17 now records where each landed, and cross-references cite the spec instead of proposals. Review findings folded in: per-tenant KMS keys (SEC-01); the workspace budget (BUD-11); compensations under pre-authorizations and grants; custodian visibility; resumed runs and the concurrency cap; content-hash matching across scopes; blind-index deletion on crypto-shredding; deprovisioning signals and directory polling; a Home-scale key-cost risk; a design for sharing (§4.5), reworked after an adversarial review of the sharing rules; fixes from a final review: compensations in the write path and tests, reservations for paid connector actions, key purposes and rotation, the chat budget, the router's fallback when the default isn't eligible, human steps inside branches and loops, all BUD-05 alert channels, suspension versus pause, and re-admitting runs paused before their first step |
 | v0.1 | 2026-10-05 | First draft for engineering review: stack review against the specification's defaults; AWS architecture for a team of 1–3; runtime, gateway, ledger and model designs; v0.4 prompt-injection hardening; work-package plan through gate 1 with spikes and a timeline; verification strategy; 18 proposed spec changes |
 
 ## Sources
 
-- *Collicity — Product Specification (Draft v0.4)*, and the archived compliance-assistant plans v3 and v3.1 with their acceptance cases (`docs/archive/`).
+- *Collicity — Product Specification (Draft v0.5)*, and in `docs/archive/` the spec v0.4 it replaced and the compliance-assistant plans v3 and v3.1 with their acceptance cases.
 - [Microsoft Entra: develop a SCIM endpoint](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups): provisioning cycles run about every 40 minutes (§5.6).
 - [Microsoft Entra: continuous access evaluation](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation): critical events, including a disabled user, can take up to 15 minutes to propagate (§5.6).
 - [Claude Platform on AWS](https://platform.claude.com/docs/en/build-with-claude/claude-platform-on-aws): Anthropic-operated access with SigV4 authentication and AWS billing (§2).
@@ -742,4 +785,5 @@ These are listed for the product owner; this document doesn't edit the specifica
 - [Token counting](https://platform.claude.com/docs/en/build-with-claude/token-counting): exact input counts for reservations (§3.2).
 - [RFC 8785, JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785): canonical approval hashes (§3.2).
 - [Unicode Technical Standard #39](https://www.unicode.org/reports/tr39/): confusable skeletons for look-alike characters (§8.1).
+- [AWS KMS pricing](https://aws.amazon.com/kms/pricing/): $1 per key per month, and $1 a month more for each of a key's first two rotations (§16).
 - [Temporal: activity definition, idempotency](https://docs.temporal.io/activity-definition#idempotency): idempotency is enforced by the service being called (§4.3).

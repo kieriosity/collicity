@@ -1,6 +1,6 @@
 # Archive
 
-Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.4)](<../Collicity — Product Specification (Draft v0.4).md>); its revision history lists what changed between drafts.
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.5)](<../Collicity — Product Specification (Draft v0.5).md>), and the current technical design is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
 
 ## Earlier Collicity drafts
 
@@ -9,6 +9,8 @@ Superseded documents, kept for reference only. The current specification is [Col
 | `Collicity — Product Specification (Draft v0.1)` (.md, .docx) | v0.1 |
 | `Collicity — Product Specification (Draft v0.2)` (.md, .docx) | v0.2; its heading still reads v0.1 |
 | `Collicity — Product Specification (Draft v0.3)` (.md, .docx) | v0.3; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.4)` (.md, .docx) | v0.4; its diagrams link to the shared images in `../images/` |
+| `Collicity — Technical Design (Draft v0.1)` (.md, .docx) | Technical design v0.1, before spec v0.5 adopted its proposed changes |
 
 ## Compliance Assistant design plans
 
@@ -24,7 +26,7 @@ Superseded on 2026-10-05 by the Collicity specification. Collicity is the broade
 - Hidden-in-original content is flagged and cannot carry a change on its own (CON-10)
 - Approval requests record their base version and go stale (RUN-04)
 - Database tenant-isolation details (SEC-09)
-- The v3 technology stack as Collicity's default (§5, §16)
+- The v3 technology stack as Collicity's default (§5, §16), until v0.5 replaced it with the stack decided in the technical design
 - The release 1 acceptance cases, adopted into the beta gate (§18.1)
 
 ### Still worth reusing
