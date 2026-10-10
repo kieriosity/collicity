@@ -1,6 +1,6 @@
 # Archive
 
-Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.11)](<../Collicity — Product Specification (Draft v0.11).md>), and the current technical design, which still follows spec v0.5, is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.12)](<../Collicity — Product Specification (Draft v0.12).md>), and the current technical design, which still follows spec v0.5, is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
 
 ## Earlier Collicity drafts
 
@@ -16,6 +16,7 @@ Superseded documents, kept for reference only. The current specification is [Col
 | `Collicity — Product Specification (Draft v0.8)` (.md, .docx) | v0.8, mandates and the first rule amendments; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.9)` (.md, .docx) | v0.9, pending-review markers and master-rule checks; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.10)` (.md, .docx) | v0.10, the self-reviewed amendments with conditions; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.11)` (.md, .docx) | v0.11, conflicts from v0.10 resolved; its diagrams link to the shared images in `../images/` |
 | `Collicity — Technical Design (Draft v0.1)` (.md, .docx) | Technical design v0.1, before spec v0.5 adopted its proposed changes |
 
 ## Compliance Assistant design plans
