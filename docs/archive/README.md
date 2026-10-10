@@ -1,6 +1,6 @@
 # Archive
 
-Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.7)](<../Collicity — Product Specification (Draft v0.7).md>), and the current technical design, which still follows spec v0.5, is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.8)](<../Collicity — Product Specification (Draft v0.8).md>), and the current technical design, which still follows spec v0.5, is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
 
 ## Earlier Collicity drafts
 
@@ -12,6 +12,7 @@ Superseded documents, kept for reference only. The current specification is [Col
 | `Collicity — Product Specification (Draft v0.4)` (.md, .docx) | v0.4; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.5)` (.md, .docx) | v0.5; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.6)` (.md, .docx) | v0.6, Web Bot Auth as an alpha; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.7)` (.md, .docx) | v0.7, the master rules in their original wording; its diagrams link to the shared images in `../images/` |
 | `Collicity — Technical Design (Draft v0.1)` (.md, .docx) | Technical design v0.1, before spec v0.5 adopted its proposed changes |
 
 ## Compliance Assistant design plans
