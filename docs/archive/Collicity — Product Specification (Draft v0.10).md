@@ -282,7 +282,7 @@ A connector can only do what the signed-in user could do themselves, using crede
 
 ### 6.2 Zero-trust requirements
 
-![On-behalf-of call flow · one check, one token, one audit record](images/on-behalf-of-call-flow.png)
+![On-behalf-of call flow · one check, one token, one audit record](../images/on-behalf-of-call-flow.png)
 
 The policy check happens before the token broker releases any credential for the call, so a task that drifts outside its ceiling never holds a token that could reach the target.
 
@@ -322,7 +322,7 @@ The policy check happens before the token broker releases any credential for the
 
 Every request Collicity sends to a target system also proves cryptographically that Collicity sent it, so the target, or the CDN or firewall in front of it, can tell Collicity from a bot that only copies its User-Agent. The signature names Collicity as the agent, never the tenant or the user, and it grants nothing.
 
-![Signed agent requests · the signature names the agent, the token names the user](images/signed-agent-requests.png)
+![Signed agent requests · the signature names the agent, the token names the user](../images/signed-agent-requests.png)
 
 The signature says which agent sent the request; the user's own token still decides what it can reach (CON-01, CON-02).
 
@@ -421,7 +421,7 @@ Nine behaviors need explicit rules before build. RUN-01 to RUN-07 each have a pr
 - **RUN-08 (P0) Honest status.** Every status, notification and summary people see is derived from recorded run state, the effect journal and evidence records (SUP-01), never from a model's own account of what it did. That includes run outcomes, step results, work-queue state and the RUN-06 terminal states. Failures, uncertain outcomes (RUN-07) and partial completion are shown as such, and nothing is reported as succeeded unless its checks passed (MR-19).
 - **RUN-09 (P0) No spawning.** A run can't create, start or change assignments, tasks or other runs, and can't hand work to another agent with broader access than its own (MR-22). Parallel branches and for-each items run under exactly the parent run's grants. A run can't add triggers, even to its own assignment (MR-14). It may arm a trigger its accepted version declares, filling that trigger's declared parameters, only as an action a person approves (ASG-11). A chained trigger (§11) may start another assignment only if that assignment's owner accepted it, and the chain is shown whenever either assignment's version is accepted. The downstream run uses only its own accepted grants, never the upstream's, and the upstream run's output reaches it only as untrusted data (SEC-12), never as instructions.
 
-![Failure handling (RUN-06) · 3 questions, 3 terminal outcomes](images/failure-handling.png)
+![Failure handling (RUN-06) · 3 questions, 3 terminal outcomes](../images/failure-handling.png)
 
 An irreversible effect, such as a sent email, makes the last answer "no", which is why the builder pushes irreversible steps to the end of an assignment.
 
@@ -738,7 +738,7 @@ The top threat is an agent being talked into misusing a user's legitimate access
 
 ## 16. Reference architecture
 
-![Reference architecture · three cloud planes; calls to models and target systems pass the connector gateway](images/reference-architecture-v0.5.png)
+![Reference architecture · three cloud planes; calls to models and target systems pass the connector gateway](../images/reference-architecture-v0.5.png)
 
 Clients never call target systems directly: the execution plane plans each action, the connector gateway checks, credentials and signs it (§6.4), and the audit log records it. Model calls also go through the connector gateway: the router picks the model, and the gateway checks the budget reservation (BUD-03) and makes the call. Device-local actions (desktop files, HomeKit) are sent to the user's own device under the same policy check, and on-prem systems are reached through an outbound-only relay the customer installs.
 
@@ -772,7 +772,7 @@ Proposed launch targets; the scale row is a placeholder until the go-to-market p
 
 ## 18. Phasing and MVP scope
 
-![Phasing · 5 phases, 3 gates](images/phasing.png)
+![Phasing · 5 phases, 3 gates](../images/phasing.png)
 
 Enterprise GA needs every requirement in the matrix's Beta and GA columns, not every P0; the matrix is authoritative for when each requirement ships. Phase 3 can overlap Phase 2 if capacity allows, and durations depend on team size (§21).
 
