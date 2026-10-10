@@ -170,7 +170,7 @@ A connector can only do what the signed-in user could do themselves, using crede
 
 ### 6.2 Zero-trust requirements
 
-![On-behalf-of call flow · one check, one token, one audit record](images/on-behalf-of-call-flow.png)
+![On-behalf-of call flow · one check, one token, one audit record](../images/on-behalf-of-call-flow.png)
 
 The policy check happens before the token broker releases any credential for the call, so a task that drifts outside its ceiling never holds a token that could reach the target.
 
@@ -209,7 +209,7 @@ The policy check happens before the token broker releases any credential for the
 
 Every request Collicity sends to a target system also proves cryptographically that Collicity sent it, so the target, or the CDN or firewall in front of it, can tell Collicity from a bot that only copies its User-Agent. The signature names Collicity as the agent, never the tenant or the user, and it grants nothing.
 
-![Signed agent requests · the signature names the agent, the token names the user](images/signed-agent-requests.png)
+![Signed agent requests · the signature names the agent, the token names the user](../images/signed-agent-requests.png)
 
 The signature says which agent sent the request; the user's own token still decides what it can reach (CON-01, CON-02).
 
@@ -287,7 +287,7 @@ Seven behaviors need explicit rules before build. Each has a proposed default th
 
 - **RUN-07 (P0) Duplicate prevention and uncertain outcomes.** Each write action declares how duplicates are prevented: (a) the target enforces an idempotency key; (b) conditional or natural-key writes (If-Match on an ETag, create-if-absent); (c) a correlation ID stamped on the object plus read-before-write; or (d) none. When an outcome is unknown (timeout, lost acknowledgement, crash after sending), (a) and (b) retry safely, (c) reads the target to find out, and (d) is never retried automatically: the step pauses as "outcome unknown" and opens a repair item showing what may have happened. Temporal retries activities but leaves idempotency keys to be enforced by the service being called, so this declaration is required for every connector action. Class (d) actions need approval each time unless they are compensable.
 
-![Failure handling (RUN-06) · 3 questions, 3 terminal outcomes](images/failure-handling.png)
+![Failure handling (RUN-06) · 3 questions, 3 terminal outcomes](../images/failure-handling.png)
 
 An irreversible effect, such as a sent email, makes the last answer "no", which is why the builder pushes irreversible steps to the end of an assignment.
 
@@ -565,7 +565,7 @@ The top threat is an agent being talked into misusing a user's legitimate access
 
 ## 16. Reference architecture
 
-![Reference architecture · three cloud planes; calls to models and target systems pass the connector gateway](images/reference-architecture-v0.5.png)
+![Reference architecture · three cloud planes; calls to models and target systems pass the connector gateway](../images/reference-architecture-v0.5.png)
 
 Clients never call target systems directly: the execution plane plans each action, the connector gateway checks, credentials and signs it (§6.4), and the audit log records it. Model calls also go through the connector gateway: the router picks the model, and the gateway checks the budget reservation (BUD-03) and makes the call. Device-local actions (desktop files, HomeKit) are sent to the user's own device under the same policy check, and on-prem systems are reached through an outbound-only relay the customer installs.
 
@@ -599,7 +599,7 @@ Proposed launch targets; the scale row is a placeholder until the go-to-market p
 
 ## 18. Phasing and MVP scope
 
-![Phasing · 5 phases, 3 gates](images/phasing.png)
+![Phasing · 5 phases, 3 gates](../images/phasing.png)
 
 Enterprise GA needs every requirement in the matrix's Beta and GA columns, not every P0; the matrix is authoritative for when each requirement ships. Phase 3 can overlap Phase 2 if capacity allows, and durations depend on team size (§21).
 
