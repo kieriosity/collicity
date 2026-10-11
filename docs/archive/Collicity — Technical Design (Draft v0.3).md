@@ -107,7 +107,7 @@ A refusal (`stop_reason: refusal`) counts as a failed attempt for that model (IN
 
 Clients never call target systems or model providers. Everything leaves through the gateway, the one service that holds credentials and can reach the internet. The services that touch untrusted content hold no credentials.
 
-![Architecture · one gateway holds every credential and makes every external call](images/tech-architecture-v0.2.png)
+![Architecture · one gateway holds every credential and makes every external call](../images/tech-architecture-v0.2.png)
 
 ### 3.1 Deployables
 
@@ -189,7 +189,7 @@ Static assets are served from S3 through CloudFront. Temporal Cloud stores only 
 
 Postgres owns every run's state. Temporal executes short segments between waits, so no workflow stays alive across a human decision, a pause or a deploy.
 
-![Run segments · runs live in Postgres; Temporal executes short segments between waits](images/tech-run-segments.png)
+![Run segments · runs live in Postgres; Temporal executes short segments between waits](../images/tech-run-segments.png)
 
 ### 4.1 Runs and segments
 
@@ -275,7 +275,7 @@ Spec §7.7 gives two ways to share, and neither lends anyone the owner's access.
 
 The gateway decides whether a call is inside the permission ceiling before any credential exists for it, and records that decision before anything leaves.
 
-![Write path · an approved write is checked, recorded, then executed](images/tech-write-path-v0.3.png)
+![Write path · an approved write is checked, recorded, then executed](../images/tech-write-path-v0.3.png)
 
 ### 5.1 Request path
 
@@ -698,7 +698,7 @@ Buy everything that isn't the product, build the enforcement and runtime core th
 - **Defer:** everything marked Defer in §2, everything pending MR review, and everything the spec postpones (§1.1).
 - **Lanes:** A is platform and execution, B is connectors and intake, C is web.
 
-![Build plan · indicative schedule for a team of three](images/tech-build-plan-v0.3.png)
+![Build plan · indicative schedule for a team of three](../images/tech-build-plan-v0.3.png)
 
 ### 14.1 Phase 0 — foundations to gate 0
 

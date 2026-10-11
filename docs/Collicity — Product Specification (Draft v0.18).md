@@ -1,4 +1,4 @@
-# Collicity — Product Specification (Draft v0.17)
+# Collicity — Product Specification (Draft v0.18)
 
 Oct 10, 2026 · @Philip Maynard
 
@@ -960,7 +960,7 @@ Scope is the largest risk: six platforms, two editions and real-money purchases 
 
 ## 21. Decisions and open questions
 
-Scoping decisions through the beta contract are made, and so are the cloud, the stack and a team of 1–3 engineers. The first remaining blocker is naming the beta design partners; the beta's AWS region and the target date follow. The master rules (§1) were adopted and amended on 2026-10-10; the readings they need are listed at the end of this section.
+Scoping decisions through the beta contract are made, and so are the cloud, the stack and a team of 1–3 engineers. The first remaining blocker is naming the beta design partners, and the beta's AWS region follows. The team plan and target date are set: three engineers, with design partners live by 2027-12-31. The master rules (§1) were adopted and amended on 2026-10-10; the readings they need are listed at the end of this section.
 
 **Decided 2026-10-05**
 
@@ -969,7 +969,7 @@ Scoping decisions through the beta contract are made, and so are the cloud, the 
 - **Deployment:** multi-tenant SaaS plus an outbound-only on-prem relay; a dedicated single-tenant cloud comes later.
 - **Purchasing:** approve each purchase by default; opt-in, capped pre-authorization per assignment and merchant (PAY-02, PAY-03). *v0.7 withdrew pre-authorization; v0.8 brings it back as purchase mandates with compensating controls (PAY-03, ASG-24).*
 - **Systems without OAuth:** personal credentials in the vault; admin-governed service accounts as a badged exception with live entitlement checks (CON-05). *v0.7 removed the exception; v0.8 restores it under the amended MR-02, read-only by default.*
-- **Cloud and team:** AWS is the single cloud; 1–3 engineers build the product through the beta, and *Collicity — Technical Design* gives a timeline for each team size.
+- **Cloud and team:** AWS is the single cloud; 1–3 engineers build the product through the beta, and *Collicity — Technical Design* gives a timeline for each team size. *Set on 2026-10-10 at three: the founder and two engineers who join within about three months.*
 - **Stack:** one React + TypeScript codebase for web and desktop, with Tauri 2 as the desktop shell unless the spike at the start of Phase 2 rules it out; React Native with Expo for mobile; a Python backend on AWS managed services (§5, §16). The technical design gives the detail and reasons.
 - **Sharing:** the owner chooses between sharing the report and sharing the assignment. A shared assignment runs as each recipient's own instance, with their own access, after an access precheck; missing access is requested from whoever can grant it, never granted by Collicity (§7.7). In the beta, reports are shared as one-off snapshots (SEC-10); assignment sharing and recurring report sharing arrive at GA.
 - **Prior work:** the compliance assistant plans v1–v3.1 and their acceptance cases are archived under `docs/archive/` in the collicity repository. Compliance is one customer vertical of Collicity; their sync semantics, measurement method and acceptance cases are reusable for any email- or chat-triggered workflow, starting with the beta.
@@ -1005,6 +1005,7 @@ Scoping decisions through the beta contract are made, and so are the cloud, the 
   - repeated clean approvals earn a mandate suggestion, never authority (ASG-26);
   - named external contacts get their own eligibility policy, off until partner evidence supports it (ASG-16);
   - one partner may pilot queue mandates late in the beta, behind an explicit eligibility gate (§18.1).
+- **Team and target date:** two engineers join the founder within about three months, making a team of three. Design partners use the Enterprise beta by 2027-12-31, and gate 1 follows by about 2028-03-31. The date allows for the hiring time and a 25% contingency on build time, and is re-baselined after the technical design's spikes in weeks 1–3. *Collicity — Technical Design* (§14.3) gives the schedule.
 
 **Open**
 
@@ -1013,7 +1014,7 @@ Scoping decisions through the beta contract are made, and so are the cloud, the 
 | Who are the named beta design partners (§18.1)? | Product owner | Yes, first: they fix the mailboxes, action types, ticketing connector and beta AWS region | The compliance customer plus one IT service desk or operations team |
 | Which AWS region hosts the beta (where the design partners need their data)? | Product owner with the design partners | Yes, before Phase 0 infrastructure | — |
 | Should SEC-01's per-tenant keys also cover database rows? | Product, security | Before the beta's data model is fixed | Per-tenant keys cover secrets, audit personal data and stored content in S3; database rows use the cluster key, isolated by row-level security (SEC-09) |
-| Target date for the Enterprise beta? | Product owner | Yes, for phasing | — |
+| Are the two engineers hired and started? Each month they start after mid-January 2027 pushes the dates out by most of a month (*Collicity — Technical Design*, §14.3) | Product owner | Yes, for the target date | — |
 | Confirm runtime defaults RUN-01 to RUN-07 and the run states | Engineering, product | Before orchestrator build | As proposed in §7.5 and §7.6 |
 | Scoring policy per task type; evaluation-set sample size and reviewers | Product, data | Before beta | Deterministic checks gate; each design partner names reviewers |
 | AI budget period: per run + per month, or lifetime per assignment? | Product | Before budget build | Per run + per month |
@@ -1052,6 +1053,7 @@ Scoping decisions through the beta contract are made, and so are the cloud, the 
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| v0.18 | 2026-10-10 | Team plan and target date set: two engineers join the founder within about three months, design partners use the Enterprise beta by 2027-12-31, and gate 1 follows by about 2028-03-31. The open question on the target date becomes one on hiring (§21) |
 | v0.17 | 2026-10-10 | The mandate hard line for home security names all four PAY-08 actions: unlocking, opening, disarming and turning off a security camera (§1, ASG-24) |
 | v0.16 | 2026-10-10 | All four PAY-08 approval-only actions are treated the same: turning off a security camera is high-impact (RUN-04), and an approval to unlock, open, disarm or turn off a camera executes immediately or lapses (PAY-08) |
 | v0.15 | 2026-10-10 | A batch may change at most 10 records; larger sets are split or approved one at a time, and the redundant one-at-a-time sentence is gone (ASG-11, §19). The payment, banking, remit-to and contact-identity exclusion covers every queue mandate (ASG-16). Unlocking, opening and disarming are high-impact (RUN-04), and an unlock or disarm approval executes immediately or lapses (PAY-08) |
