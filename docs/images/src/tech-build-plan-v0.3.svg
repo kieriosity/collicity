@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1344" height="1081" viewBox="0 0 1344 1081" font-family="Inter, 'Segoe UI', Arial, sans-serif">
+<rect width="1344" height="1081" fill="#ffffff"/>
+<text x="42" y="50" font-size="28" font-weight="600" fill="#151515" text-anchor="start">A team of three reaches gate 0 in about 20 weeks and gate 1 in about 40</text>
+<text x="42" y="86" font-size="20" font-weight="400" fill="#5b5b56" text-anchor="start">Indicative schedule by lane (A platform, B connectors and intake, C web); one engineer takes about three times as long</text>
+<text x="402.34090909090907" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">1</text>
+<text x="485.0681818181818" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">5</text>
+<text x="588.4772727272727" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">10</text>
+<text x="691.8863636363636" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">15</text>
+<text x="795.2954545454546" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">20</text>
+<text x="898.7045454545455" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">25</text>
+<text x="1002.1136363636365" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">30</text>
+<text x="1105.5227272727273" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">35</text>
+<text x="1208.931818181818" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">40</text>
+<text x="1291.659090909091" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">44</text>
+<text x="42" y="128" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="start">Week</text>
+<line x1="392" y1="142" x2="1302" y2="142" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="42" y="179" font-size="18" font-weight="600" fill="#1b1b1b" text-anchor="start">Phase 0 · foundations</text>
+<text x="42" y="212" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.1 Infra, CI, identity, RLS</text>
+<rect x="392.0" y="195" width="82.72727272727273" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="482.72727272727275" y="212" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A</text>
+<text x="42" y="245" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.2 Spikes S1–S11</text>
+<rect x="392.0" y="228" width="82.72727272727273" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="482.72727272727275" y="245" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">all</text>
+<text x="42" y="278" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.3 Fakes with fault injection</text>
+<rect x="433.3636363636364" y="261" width="62.04545454545455" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="503.40909090909093" y="278" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">B</text>
+<text x="42" y="311" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.4 Ledger, model adapter</text>
+<rect x="474.72727272727275" y="294" width="82.72727272727273" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="565.4545454545455" y="311" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A</text>
+<text x="42" y="344" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.5 Gateway, broker, audit</text>
+<rect x="495.40909090909093" y="327" width="144.77272727272728" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="648.1818181818182" y="344" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">B</text>
+<text x="42" y="377" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.6 extract + untrusted</text>
+<rect x="433.3636363636364" y="360" width="82.72727272727273" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="524.0909090909091" y="377" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">C</text>
+<text x="42" y="410" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.7 Run engine (v0.7 form)</text>
+<rect x="557.4545454545455" y="393" width="186.13636363636365" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="751.5909090909091" y="410" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A</text>
+<text x="42" y="443" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.8 Web shell</text>
+<rect x="516.0909090909091" y="426" width="103.40909090909092" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="627.5" y="443" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">C</text>
+<text x="42" y="476" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.9 Gate 0 suites, master rules</text>
+<rect x="722.909090909091" y="459" width="62.04545454545455" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="792.9545454545455" y="476" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">all</text>
+<text x="42" y="509" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.10 Approvals: CON-21, ASG-25</text>
+<rect x="619.5" y="492" width="124.0909090909091" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="751.5909090909091" y="509" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">C+A</text>
+<text x="42" y="542" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P0.11 Beta security additions</text>
+<rect x="640.1818181818182" y="525" width="103.40909090909092" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="751.5909090909091" y="542" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">B</text>
+<text x="42" y="575" font-size="18" font-weight="600" fill="#1b1b1b" text-anchor="start">Phase 1 · Enterprise beta</text>
+<text x="42" y="608" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.1 Mail intake</text>
+<rect x="784.9545454545455" y="591" width="144.77272727272728" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="937.7272727272727" y="608" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">B</text>
+<text x="42" y="641" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.2 Queues, visibility, lineage</text>
+<rect x="784.9545454545455" y="624" width="82.72727272727273" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="875.6818181818182" y="641" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A+C</text>
+<text x="42" y="674" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.3 Supervisor, router, inventory</text>
+<rect x="929.7272727272727" y="657" width="82.72727272727273" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="1020.4545454545455" y="674" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A</text>
+<text x="42" y="707" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.4 Admin, budgets, Q&amp;A, builder</text>
+<rect x="867.6818181818182" y="690" width="206.81818181818184" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="1082.5" y="707" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">C+A</text>
+<text x="42" y="740" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.5 Evaluation and metrics</text>
+<rect x="929.7272727272727" y="723" width="62.04545454545455" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="999.7727272727273" y="740" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">B</text>
+<text x="42" y="773" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.6 Onboarding, then 8 weeks of use</text>
+<rect x="1012.4545454545455" y="756" width="20.681818181818183" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<rect x="1033.1363636363637" y="756" width="165.45454545454547" height="24" rx="6" ry="6" fill="#dce8fa" stroke="#2f6fdb" stroke-width="1.5"/>
+<text x="1115.8636363636365" y="773" font-size="14" font-weight="400" fill="#1b1b1b" text-anchor="middle">8 weeks of partner use</text>
+<text x="42" y="806" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.7 Injection screening</text>
+<rect x="867.6818181818182" y="789" width="41.36363636363637" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="917.0454545454546" y="806" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A</text>
+<text x="42" y="839" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.8 Batch approval</text>
+<rect x="991.7727272727274" y="822" width="41.36363636363637" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="1041.1363636363637" y="839" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">C</text>
+<text x="42" y="872" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.9 Efficiency baseline, telemetry</text>
+<rect x="909.0454545454546" y="855" width="41.36363636363637" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="958.409090909091" y="872" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">C+B</text>
+<rect x="1012.4545454545455" y="855" width="20.681818181818183" height="24" rx="6" ry="6" fill="#dce8fa" stroke="#2f6fdb" stroke-width="1.5"/>
+<text x="1041.1363636363637" y="872" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">week-0 study</text>
+<text x="42" y="905" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.10 Signed requests (alpha)</text>
+<rect x="991.7727272727274" y="888" width="41.36363636363637" height="24" rx="6" ry="6" fill="#ecece6" stroke="#cbcbc3" stroke-width="1.5"/>
+<text x="1041.1363636363637" y="905" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">B</text>
+<text x="42" y="938" font-size="17" font-weight="400" fill="#1b1b1b" text-anchor="start">P1.11 Mandate pilot (optional)</text>
+<rect x="1053.818181818182" y="921" width="103.40909090909092" height="24" rx="6" ry="6" fill="#ffffff" stroke="#b0b0a7" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="1165.227272727273" y="938" font-size="14" font-weight="400" fill="#5b5b56" text-anchor="start">A+C</text>
+<line x1="784.9545454545455" y1="150" x2="784.9545454545455" y2="963" stroke="#c8c8bf" stroke-width="2" stroke-dasharray="5 5"/>
+<polygon points="784.9545454545455,967 795.9545454545455,978 784.9545454545455,989 773.9545454545455,978" fill="#c8c8bf"/>
+<text x="784.9545454545455" y="1013" font-size="17" font-weight="600" fill="#1b1b1b" text-anchor="middle">Gate 0</text>
+<text x="784.9545454545455" y="1035" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">week 20</text>
+<line x1="1033.1363636363637" y1="150" x2="1033.1363636363637" y2="963" stroke="#c8c8bf" stroke-width="2" stroke-dasharray="5 5"/>
+<polygon points="1033.1363636363637,967 1044.1363636363637,978 1033.1363636363637,989 1022.1363636363637,978" fill="#c8c8bf"/>
+<text x="1033.1363636363637" y="1013" font-size="17" font-weight="600" fill="#1b1b1b" text-anchor="middle">Partners live</text>
+<text x="1033.1363636363637" y="1035" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">week 32</text>
+<line x1="1198.590909090909" y1="150" x2="1198.590909090909" y2="963" stroke="#c8c8bf" stroke-width="2" stroke-dasharray="5 5"/>
+<polygon points="1198.590909090909,967 1209.590909090909,978 1198.590909090909,989 1187.590909090909,978" fill="#c8c8bf"/>
+<text x="1198.590909090909" y="1013" font-size="17" font-weight="600" fill="#1b1b1b" text-anchor="middle">Gate 1</text>
+<text x="1198.590909090909" y="1035" font-size="16" font-weight="400" fill="#5b5b56" text-anchor="middle">week 40</text>
+</svg>

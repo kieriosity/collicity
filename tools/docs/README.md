@@ -12,7 +12,7 @@ npm install
 ## Markdown to .docx
 
 ```bash
-node md2docx.js "../../docs/Collicity — Technical Design (Draft v0.2).md"
+node md2docx.js "../../docs/Collicity — Technical Design (Draft v0.3).md"
 ```
 
 This writes the `.docx` next to the `.md`. Pass a second path to write it elsewhere, and add `--page-numbers` for a page-number footer.
