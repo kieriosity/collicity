@@ -1,6 +1,6 @@
 # Archive
 
-Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.15)](<../Collicity — Product Specification (Draft v0.15).md>), and the current technical design, which still follows spec v0.5, is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.16)](<../Collicity — Product Specification (Draft v0.16).md>), and the current technical design, which still follows spec v0.5, is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
 
 ## Earlier Collicity drafts
 
@@ -20,6 +20,7 @@ Superseded documents, kept for reference only. The current specification is [Col
 | `Collicity — Product Specification (Draft v0.12)` (.md, .docx) | v0.12, the re-confirmation date and amendment count; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.13)` (.md, .docx) | v0.13, the efficiency requirement, batch approval and mandate suggestions; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.14)` (.md, .docx) | v0.14, batch limits and external-sender exclusions; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.15)` (.md, .docx) | v0.15, the batch cap, mandate exclusions and unlock tiering; its diagrams link to the shared images in `../images/` |
 | `Collicity — Technical Design (Draft v0.1)` (.md, .docx) | Technical design v0.1, before spec v0.5 adopted its proposed changes |
 
 ## Compliance Assistant design plans
