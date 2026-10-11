@@ -1,10 +1,10 @@
-# Collicity — Technical Design (Draft v0.4)
+# Collicity — Technical Design (Draft v0.5)
 
-Oct 10, 2026 · Draft for engineering review · Companion to *Collicity — Product Specification (Draft v0.18)*
+Oct 11, 2026 · Draft for engineering review · Companion to *Collicity — Product Specification (Draft v0.19)*, the beta baseline
 
 ## 1. Overview
 
-This document turns the product specification (v0.18) into a system that can be built. It sets out:
+This document turns the product specification (v0.19) into a system that can be built. It sets out:
 
 - the stack;
 - the architecture;
@@ -13,13 +13,13 @@ This document turns the product specification (v0.18) into a system that can be 
 
 GA and Home are outlined at coarser grain. Requirement IDs refer to the specification.
 
-**Decisions this document assumes** (2026-10-05)
+**Decisions this document assumes** (2026-10-05, updated through 2026-10-11)
 
 | Decision | Choice | Consequence |
 | --- | --- | --- |
 | Cloud | AWS; one region for the beta, chosen by where the design partners need their data | Managed services throughout; US and EU cells at GA |
-| Team | Collicity is one person today; two engineers join within about three months, making three (spec §21) | Three services and one sandbox. Buy everything that isn't the product; defer whatever the beta matrix doesn't require. §14.3 gives the schedule at one engineer and at three |
-| Scope | The spec's §18 Beta column names 98 requirement IDs: 96 required, plus ASG-16 and ASG-24 for the optional mandate pilot (82 at spec v0.5). GA and Home are outlined | Every Beta requirement maps to a work package (§14) |
+| Team | Collicity is one person today; two engineers join within about three months, making three (spec §21) | Three services and one sandbox. Buy everything that isn't the product; defer whatever the beta matrix doesn't require. §14.3 gives the schedule at one, two and three engineers |
+| Scope | The spec's §18 Beta column names 103 requirement IDs: 101 required, plus ASG-16 and ASG-24 for the optional mandate pilot (82 at spec v0.5). GA and Home are outlined | Every Beta requirement maps to a work package (§14) |
 | Master rules | The beta runs under the master rules' v0.7 wording. Anything the spec marks *pending MR review* isn't built until an outside reviewer re-confirms its amendment, and anything postponed isn't built at all (§1.1) | The beta differs from GA in approval validity, compensations, disclosure and more; §1.1 lists each |
 | Target date | Design partners live by 2027-12-31; gate 1 by about 2028-03-31 (spec §21) | The three-engineer plan, allowing for hiring time and a 25% contingency; re-baselined after the spikes (§14.3) |
 
@@ -44,7 +44,7 @@ Each master rule (spec §1) is enforced by something in this design, never by a 
 | MR-05 | Egress only to hosts in approved manifests (Network Firewall); recipient rules; disclosure screens for snapshots (§3.1, §5.2, §9) | In force. Outside the tenant, the beta sends only snapshots to outside recipients, after a disclosure-screen approval and only for labels that allow it, and alerts to destinations an admin configured |
 | MR-06 | Typed grants with resource selectors and field allowlists, enforced before the call and on the response (§5.2) | In force |
 | MR-07 | Router eligibility includes region, retention and the compliance profile; no cross-region inference (§7.1) | In force |
-| MR-08 | Lineage carries labels; every beta output takes the tenant's most restrictive label (§8.2) | Default label in the beta |
+| MR-08 | Labels read from mail headers, attachments and through Graph are compared before every write; a write of labeled content is blocked when the target's label is lower, missing or unreadable (§5.5, §8.2) | In force |
 | MR-09 | Canonical approval hash, validity checked at consumption, effect journal (§3.2, §5.1, §5.4) | 15-minute validity; every compensation has its own approval. **Pending:** tiered validity, mandates, compensations under the original authorization |
 | MR-10 | No purchases in the beta; Home's purchase ledger and approvals (§14.5) | **Pending:** purchase mandates (PAY-03) and price ceilings (PAY-05) |
 | MR-11 | One record per approved action, batches included; phishing-resistant authentication; approver authority checks (§5.4, §5.8, §5.9) | In force; batch approval after its self-review. **Pending:** mandates, device-signed and offline approvals |
@@ -79,7 +79,7 @@ Spec v0.4's stack defaults came from the archived compliance-assistant plan v3. 
 | Object storage | S3-compatible | **Keep:** S3 with SSE-KMS under the tenant's `content` key (each write names it; S3 Bucket Keys limit KMS calls); Object Lock (compliance mode) for audit anchors | — |
 | Vector store | pgvector or dedicated | **Defer** to GA (pgvector) | Beta retrieval is live federated search with the user's token (CON-09) |
 | Policy engine | Cedar or OPA (CON-02) | **Change:** in the beta, a typed, deterministic grant evaluator in the gateway. Cedar arrives at GA with policies as code (ADM-08), custom connectors (CON-15) and the edge executor, tested against the beta evaluator on the same cases | The beta's grants are a small, closed rule set; property-based tests prove it more directly than policies would |
-| Secrets vault | KMS/HSM-backed vault (CON-04) | **Decide:** KMS envelope encryption with ciphertexts in a `vault` schema. A KMS key per tenant for each purpose that holds tenant data (SEC-01): `credential` (the vault: connector tokens, CON-05 credentials and BYO provider keys), `audit` (wraps per-person keys and encrypts the tenant's audit archives) and `content` (S3 snapshots, payloads, prompts and outputs). The tenant is also in the encryption context. KMS rotates these keys automatically; customer-managed keys at GA (XKS or CloudHSM) rotate under the customer's control. Aurora is encrypted under its cluster key, and rows are isolated by row-level security (SEC-09; spec §21 asks whether rows need tenant keys too). Secrets Manager for service secrets; XKS or CloudHSM for customer-managed keys at GA | No Vault cluster to run. Per-tenant keys make customer-managed keys a key swap at GA for the data they cover. Per-person audit keys (SEC-07) are wrapped data keys, not 100,000 KMS keys |
+| Secrets vault | KMS/HSM-backed vault (CON-04) | **Decide:** KMS envelope encryption with ciphertexts in a `vault` schema. A KMS key per tenant for each purpose that holds tenant data (SEC-01): `credential` (the vault: connector tokens, CON-05 credentials and BYO provider keys), `audit` (wraps per-person keys and encrypts the tenant's audit archives) and `content` (S3 snapshots, payloads, prompts and outputs). The tenant is also in the encryption context. KMS rotates these keys automatically; customer-managed keys at GA (XKS or CloudHSM) rotate under the customer's control. Aurora is encrypted under its cluster key, and rows are isolated by row-level security (SEC-09; spec §21 confirmed this on 2026-10-11). Secrets Manager for service secrets; XKS or CloudHSM for customer-managed keys at GA | No Vault cluster to run. Per-tenant keys make customer-managed keys a key swap at GA for the data they cover. Per-person audit keys (SEC-07) are wrapped data keys, not 100,000 KMS keys |
 | Sign-in | Hosted OIDC/SAML service | **Decide:** WorkOS for SSO, Directory Sync (SCIM) and its Admin Portal; AuthKit for consumer sign-in and passkeys in Home. Approvals and step-up need phishing-resistant authentication (CON-21, §5.8) | Enterprise SSO and SCIM are beta-critical and commodity |
 | Connector authorization | — | **Decide:** the token broker runs its own OAuth 2.1 consent per connector (authorization code with PKCE). The Entra application authenticates with client assertions signed by a KMS key that can't be exported. MSAL is configured for continuous access evaluation (CAE) | Sign-in tokens can't be exchanged for on-behalf-of tokens. Collicity's own application credential never leaves the HSM |
 | Model providers | One hosted provider + bring-your-own | **Decide:** Claude through Claude Platform on AWS, signed with SigV4 from the gateway's task role, so no static key exists; token counting, Batches and `inference_geo` are available. A second model family on Bedrock judges across families, chosen by evaluation | Invariant 3 holds for the default provider by construction, with full Claude API parity inside AWS |
@@ -257,7 +257,7 @@ Spec §7.7 gives two ways to share, and neither lends anyone the owner's access.
   Each edition then waits for the owner's approval, unless a publishing mandate (ASG-24, after MR review) covers it and all of these hold; editions for recipients outside the tenant are always approved one by one. If a check fails, the edition is held and the owner is asked again; if the owner has lost access to a source, nothing publishes until they regain it.
 - **Instances (ASG-20).** Sharing with named people creates an `assignment_instance` for each; a group or tenant share creates one only when a member opens the offer, with SCIM group events driving joins and leaves.
   - Each instance has its recipient as owner and a state: offered, blocked (something missing), active, or ended with a reason (withdrawn, declined, left, archived).
-  - It records the version its recipient accepted and any newer version on offer, its own resolutions of personal selectors, its triggers (mail triggers on the recipient's resolved folders; webhook triggers with their own endpoint, verified by the sender's signature or by a secret the sender's system generates and the recipient enters into the vault, so Collicity never displays one (MR-03; §18) and an assignment budget under the recipient's user budget.
+  - It records the version its recipient accepted and any newer version on offer, its own resolutions of personal selectors, its triggers (mail triggers on the recipient's resolved folders; webhook triggers with their own endpoint, verified by the sender's signature or by a secret the sender's system generates and the recipient enters into the vault, so Collicity never displays one, per MR-03 and §18), and an assignment budget under the recipient's user budget.
   - Admission (RUN-01) starts runs only for an active instance, on its accepted version. Every run, approval, step grant and audit record carries the instance owner, so the gateway always sees the recipient as the principal. A mandate (pending MR review) applies only to the instance it was made for.
 - **Acceptance and versions (ASG-23).** `accept_version()` records acceptance per instance, by its owner only. A new version is recorded as an offer and changes nothing until the recipient accepts it on a screen that shows the diff of instructions, capabilities and provenance against the version the recipient last accepted, never against the previous published version; a version that widens anything beyond the accepted version re-runs the whole precheck first. The acceptance screen hides the names of resources and sources the recipient can't read, and the share screen shows the owner what recipients will see.
 - **Access precheck (ASG-21)** has two stages.
@@ -339,7 +339,7 @@ Each element of CON-02 has a typed form:
   - Batch approval is a reading of MR-11 that needs its self-review before it ships (spec §21).
 - **Compensation.** The approval hash covers the action and its **declared compensation, with exact restore values** (for example, restore Qty to 10).
   - **Always:** a compensation runs only for an effect this run applied and hasn't reversed, and only restores the values recorded when the effect ran (RUN-06, CON-02).
-  - **In the beta** (v0.7 wording), each compensation is also an action with its own approval request (`approval_request.kind = compensation`, linked to its `effect_id`), showing the restore values. A compensation that deletes, such as removing a created list item or a reply draft, is high-impact (§5.2), so it is approved on its own, never in a batch, and its approver needs delete permission (§5.9; §18). If no one approves it before its ASG-10 timeout, the effect stays applied and the run ends Completed with partial side effects (§18).
+  - **In the beta** (v0.7 wording), each compensation is also an action with its own approval request (`approval_request.kind = compensation`, linked to its `effect_id`), showing the restore values. A compensation that deletes, such as removing a created list item or a reply draft, is high-impact (§5.2), so it is approved on its own, never in a batch, and its approver needs delete permission (§5.9; spec §18.1). If no one approves it before its request expires (RUN-04: 7 days by default; unlike other requests, it isn't asked again), the effect stays applied and the run ends Completed with partial side effects (RUN-06).
   - **After MR review**, a compensation runs under the original approval or mandate, even after that approval was used or expired, and only restores values recorded for an effect this run applied (invariant 2, RUN-06).
   - Either way, a compensation that would unlock, open, disarm, turn off a camera, widen access or send outside the trusted boundary needs its own approval (RUN-06).
   - A paid write's reservation also covers its declared compensation's worst case, so a compensation never waits for budget; that part is released when the run ends without needing it (BUD-03). The write's grant also covers its declared compensation, only to reverse an effect the run applied and outside the volume limit (CON-02).
@@ -353,12 +353,19 @@ Each element of CON-02 has a typed form:
 | Update a row in a named Excel table | (b) If-Match on the row, else (c) a correlation column | Compensable: restore prior values | Low: a restorable overwrite | Edit access to the workbook, read with the approver's own token (spike S9) | If-Match support; formula handling |
 | Create or update a SharePoint list item | (c) for creates; (b) or (c) for updates | Compensable: delete or restore | Low | Edit permission on the list item, from SharePoint's effective permissions for the approver (spike S9) | ETag support; read-after-write lag |
 | Create or update a ticket in the partner system | (a) if the system enforces idempotency keys, else (c) | Compensable: close as created in error, or restore fields | Low | The ticketing system's own permission check, with the approver's credential (spike S9) | Idempotency support |
-| Draft a reply in the user's mailbox | (c) a correlation ID in an extended property | Compensable: delete the draft | Low: a draft isn't a send | Access to the queue owner's mailbox; for a personal mailbox, usually only the owner passes (spike S9, §18) | Filtering on the extended property; Reply-To behavior |
+| Draft a reply in the user's mailbox | (c) a correlation ID in an extended property | Compensable: delete the draft | Low: a draft isn't a send | Personal mailbox: only its owner approves. Shared mailbox: a delegate with access to it (spec §18.1; spike S9) | Filtering on the extended property; Reply-To behavior |
 
 A batch that would change more than 10 rows or items is split (§5.4).
 
 - **AI disclosure (SEC-14).** Everything in the beta that people read says it comes from an AI agent acting for a named person, and carries the agent ID (MR-04): reply drafts (a visible note at the top, in the tenant's wording, plus a message header), ticket bodies, approval-request notifications, and the AI-written narrative in snapshots. The header-only form for drafts the user sends waits on MR review.
-- **Labels (CON-11).** Each write and draft records the tenant's beta default label on its effect, its lineage and its approval screen (§8.2). Collicity never relabels a target, since that would be a security change SEC-16 refuses in the beta, and never writes marking text outside the field allowlist; drafts carry the marking in their AI note. Whether a field write into a lower-labeled workbook, list or ticket counts as a downgrade needs the product owner's ruling (§18).
+- **Labels (CON-11).** The beta reads labels from mail headers (the `msip_labels` header, mapped to label names through Graph), from attachments whose file metadata carries one (read by `extract`), and, through Graph, from the files it writes to (spike S12). An attachment carries at least its mail's label. Before a write, the gateway compares the source's label with the target's:
+  - a source label higher than the target's blocks the write;
+  - a target that could hold a label but has none, or whose label can't be read, blocks writes of labeled content, and the owner gets a repair item asking for a person to label the target;
+  - a target that can't hold a label, such as a ticket or a list item, gets a visible marking in a text field its grant allows, or the write is blocked if there is none;
+  - a reply draft carries its source's label, set through Graph if spike S12 shows it can be, and otherwise as a marking in its AI note;
+  - unlabeled content has nothing to downgrade, though it stays sensitive for routing (MR-07).
+
+  Collicity never labels or relabels a target, which would be a security change that SEC-16 refuses in the beta.
 
 ### 5.6 Deprovisioning (CON-06)
 
@@ -384,7 +391,7 @@ Measured from the identity provider, 60 seconds is out of reach through SCIM alo
   - **Option A:** a non-exportable KMS Ed25519 key (`ECC_NIST_EDWARDS25519`), with one KMS Sign call per request. Custody is simplest, but every signed call adds a KMS round trip and counts against KMS request quotas.
   - **Option B:** short-lived keys generated in each gateway task's memory, never persisted, listed in the directory before first use and rotated daily. There is no per-request KMS call, but the directory changes more often.
   - **Recommendation:** Option A for the beta's low volume, measured in spike S11 and revisited before the GA load test. KMS doesn't rotate asymmetric keys automatically, so a scheduled job creates a new key at least every 90 days, lists it in the directory, switches signing to it, and retires the old one once its signatures have expired (CON-19).
-- **Directory.** A gateway job builds the JWK Set with each key's proof-of-possession signature and writes it to S3. CloudFront serves it at `/.well-known/http-message-signatures-directory` on the key-directory hostname (spec §21 asks which), with the right content type and no redirects. The job runs hourly, since the proofs expire, and on every rotation.
+- **Directory.** A gateway job builds the JWK Set with each key's proof-of-possession signature and writes it to S3. CloudFront serves it at `/.well-known/http-message-signatures-directory` on a dedicated hostname on Collicity's primary domain (spec §21), with the right content type and no redirects. The job runs hourly, since the proofs expire, and on every rotation.
 - **Audit.** Each signed call's key ID and nonce go into its audit record (§10).
 
 ### 5.8 Phishing-resistant approvals (CON-21)
@@ -399,9 +406,9 @@ Measured from the identity provider, 60 seconds is out of reach through SCIM alo
 ### 5.9 Approver authority (ASG-25)
 
 - **The check.** When a person decides an approval, the gateway runs the connector's declared access check (CON-12) with the approver's own delegated token, for the action's resource and operation, and checks any role the action needs (ADM-01). The approver's identity is used only to read their access; the action runs under the queue owner's token.
-- **Its path.** Access checks run outside any run, so the gateway gives them their own path: no step grant, authorized by the approver's own decision, which reads only their own access, with a zero-cost model. Invariant 2 names only the precheck (ASG-21) as an authorization for access checks, so it needs to name the approver's decision too (§18).
+- **Its path.** Access checks run outside any run, so the gateway gives them their own path: no step grant, authorized by the approver's own decision, which reads only their own access, with a zero-cost model. Spec v0.19's invariant 2 names the approver's own decision as the authorization for this check.
 - **Other approvers.** A budget owner raising a limit (BUD-04) is checked by role and budget ownership, with no connector call. Budget raises and snapshot publications (SEC-10) also produce an `auth_event` and need phishing-resistant authentication (§5.8).
-- **Connections.** Delegates must therefore have connected the beta's connectors themselves, under their own consent (CON-08). The approval screen asks them to connect before their first approval (§18).
+- **Connections.** Delegates must therefore have connected the beta's connectors themselves, under their own consent (CON-08). The approval screen asks them to connect before their first approval (spec §18.1).
 - **Caching.** A result is cached for at most 5 minutes per approver, resource and operation, and recorded in `approver_check` and the audit log. At consumption, the gateway checks only that the approver is still active (CON-06 epochs), not their access again (§18).
 - **Failure.** A failed or incomplete check refuses the approval and offers to route the request to the queue owner or a delegate who passes.
 - **Per action:** §5.5 lists each beta action's check; spike S9 confirms each one.
@@ -468,6 +475,7 @@ The router starts every task type on a curated default and moves to cheaper mode
   - Until one clears the bar, each task type uses a **curated default model with full supervision** (every check runs on every attempt, SUP-02). This is the beta's "rule-based router" (RTR-02).
   - If the default isn't eligible for a task (RTR-01), the fallback is the eligible unit with the highest lower bound, ties going to the lower estimated cost. With no eligible unit, the step fails before any model call, and the decision record says which condition excluded each model (RTR-04).
 - **Records.** Each decision records its candidates, scores and a plain-language reason (RTR-04). Overrides follow RTR-05. Exploration (RTR-06) is GA.
+- **Deprecation (PRV-06).** The catalog holds each model version's deprecation date, and the version leaves eligibility on that date. It leaves earlier if its verified-success lower bound falls below the task's quality bar (RTR-02). A replacement starts a new inventory record (INV-03) and routes on its own evidence.
 
 ### 7.2 Supervisor (SUP-01 to SUP-04)
 
@@ -476,14 +484,14 @@ The router starts every task type on a curated default and moves to cheaper mode
 - **Interventions** follow SUP-03's ladder. Each spends from the budget of the work it checks (the assignment budget, or the workspace budget for a dry run; SUP-03, BUD-11) and appears on the run timeline.
 - **Evidence.** Every check writes an append-only evidence record: class, check ID, result, judge model and version, and input hashes.
 
-### 7.3 Inventory and evaluation (INV-01–03, 06, 07; SUP-06)
+### 7.3 Inventory and evaluation (INV-01–03, 06, 07; SUP-06; ASG-27)
 
 - **Inventory.**
   - Raw evidence and outcome events are stored; scores are derived from them.
   - Labels stay provisional through the 7-day outcome window. A nightly job then finalizes them and updates posteriors.
   - Attribution follows INV-07.
 - **Evaluation set (SUP-06).**
-  - **Sampling.** A sampler draws runs stratified by task type and criticality. For triage it also draws inputs stratified by pipeline stage, including pre-filter drops and mail that matched no trigger.
+  - **Sampling.** A sampler draws runs stratified by task type and criticality. For triage it also stratifies by sender category (internal, known external, unknown), so miss and error rates can be compared across senders, and draws inputs stratified by pipeline stage, including pre-filter drops and mail that matched no trigger. It also samples approved actions, giving the rate of approved actions later judged wrong per action type (ASG-27).
   - **Adjudication.** Reviewers who are entitled to the data adjudicate without seeing the supervisor's verdict.
   - **Metrics.** Recall uses the stratified bootstrap (archived AC-15); precision counts adjudicated items only (AC-16).
   - **Re-runs.** After model or prompt changes, labeled sets are re-run through the Batches API, at half price.
@@ -527,7 +535,7 @@ The `untrusted` library runs only inside `extract`. It returns a *model view*, a
 - **Standing instructions** are task descriptions, template prompts, assignment versions, builder output, saved chat context and supervisor suggestions.
   - They are read-only to `app_worker`; `app_user` may insert drafts.
   - Only `accept_version()` makes a draft current. It is a SECURITY DEFINER function that requires an interactive session belonging to a person, and its acceptance screen shows provenance.
-- **Labels (CON-11).** Lineage also carries a sensitivity label. In the beta, every output, draft and snapshot takes the tenant's most restrictive label, or an admin's default that is at least as restrictive; destinations that can't hold a label get a visible marking. The tenant's labels and their order come from Purview through Graph, or an admin enters them (§18).
+- **Labels (CON-11).** Lineage carries the labels read from each source (§5.5), and every output carries the highest label in its lineage. A snapshot whose label an admin rule forbids publishing is held for review (SEC-10).
 - **Conversations.** A Q&A conversation that has cited untrusted content stays tainted for its later turns (SEC-12).
 - **Prompt builder.** It accepts two types only: `TrustedText` (from accepted versions) and `ModelView` (normalized untrusted content). System prompts hold no secrets.
 
@@ -576,7 +584,7 @@ Every read path is bounded by the database: tenant isolation and source visibili
 - **Q&A (QA-01–03).** Answers are assembled in `app` under the asker's RLS, cite run steps, data rows and documents, and carry the lineage taint of what they cite.
 - **Snapshots (SEC-10).** A published snapshot is a frozen copy with its own access list:
   - it carries the most restrictive label among its sources;
-  - questions about it are answered only from its own content;
+  - questions about it are answered only from its own content, and in the beta only for recipients inside the tenant (QA-03);
   - withdrawing it purges recipients' caches;
   - publish, view, flag and withdrawal are audited.
 
@@ -638,15 +646,16 @@ Graph change-notification subscriptions exist only for mail triggers an accepted
 | Standing instructions | `assignment`, `assignment_version`, `version_acceptance` | `agent_id` (MR-04); immutable task graph, grants, budgets, manifest pins, content hash, taint; `accepted_by` (a person; per instance for a shared assignment, and always its owner); widening diff |
 | Connectors | `connector_manifest`, `connection`, `vault.token`, `step_grant`, `capability_usage` | Signed manifest (action classes, recovery and duplicate-prevention classes, resource parameters, cost model, replay window, hosts, access check); bound `tid`/`oid` and consented scopes; ciphertext readable only by `gw`; grant expiry and epochs; `used ≤ limit` |
 | Execution | `run`, `run_step`, `trigger_event`, `effect`, `repair_item` | `state`, `state_version`, `segment_no`, `continuation`, `price_version`; unique dedup key with expiry; unique idempotency key, `params_hash`, class, outcome (sending, applied, unknown, failed, compensated), prior values |
-| Approvals | `approval_request`, `approval_batch`, `auth_event`, `approver_check`, `webauthn_credential` | `kind` (action or compensation) and, for a compensation, its `effect_id`; canonical parameters and hash; both base versions; bound compensation; impact tier; visibility set; state (including `expired`); `expires_at` while undecided and `valid_until` once decided; `consumed_at`; batch ID; the authentication method and whether it is phishing-resistant; the approver check's result and source; each person's passkeys (credential ID, public key, sign count) |
+| Approvals | `approval_request`, `approval_batch`, `auth_event`, `approver_check`, `webauthn_credential` | `kind` (action or compensation) and, for a compensation, its `effect_id`; canonical parameters and hash; both base versions; bound compensation; impact tier; visibility set; state (including `expired`); `expires_at` while undecided and `valid_until` once decided; `consumed_at`; decision duration (ASG-27); batch ID; the authentication method and whether it is phishing-resistant; the approver check's result and source; each person's passkeys (credential ID, public key, sign count) |
 | Intake and queue | `source_object`, `source_version`, `scope_sync`, `sync_gap`, `queue_item`, `evidence_link`, `review_decision`, `sender_counter` | `current_acl`; identity confidence, content flags, references to the model view and offset map, stage outcome; item status, `assignment_status`, `repair_status`, approved fields, revisions |
-| Lineage and visibility | `lineage`, `visibility_set`, `visibility_member`, `sensitivity_label` | Sources, taint and `label_id`; the RLS predicate for `app_user`; each tenant's labels with their name, rank and whether one is the beta default (CON-11) |
+| Lineage and visibility | `lineage`, `visibility_set`, `visibility_member`, `sensitivity_label` | Sources, taint and `label_id`; the RLS predicate for `app_user`; each tenant's labels with their name and rank (CON-11) |
 | Budget | `ledger_account`, `reservation`, `ledger_entry`, `limit_change`, `price_version` | Limit, spent, reserved, lock rank, alerts sent; reservation state |
 | Models and quality | `model_catalog`, `router_decision`, `model_call`, `evidence_record`, `attempt`, `adjudication` | Provider terms (retention, zero data retention, region); labels provisional until the outcome window closes |
 | Audit and outbox | `audit.record`, `audit.seal`, `audit.anchor`, `person_key`, `outbox_event`, `detection_run` | INSERT-only; chain hashes; sequence assigned at publish; visibility set; each master-rule detection query's last run and findings |
 | Efficiency (G6) | `time_study_sample`, `hands_on_event` | Request type and complexity; week 0 or beta; minutes by stage (intake, review, approval, correction, repair); completed or not |
 | Agent signing (alpha) | `signing_key` | Public key, thumbprint, state (pending, active, retired), not-before and not-after. Private keys are never stored here |
 | Mandates (pending MR review; the optional pilot) | `mandate`, `mandate_execution` | Owner, assignment, actions and targets, bounds and caps, expiry and state; each execution's bounds check, receipt and undo window |
+| Governance (AI RMF additions) | `ai_incident`, `feedback_report`, `supplier_assessment`, `risk_record` | An incident's classification, timeline and tenant notices (SEC-20); outside reports and their triage (SEC-22); each provider's assessment and review date (PRV-06); each action type's accepted risk (SEC-21, at GA) |
 | Sharing (GA) | `report_share`, `assignment_share`, `assignment_instance`, `access_check`, `access_request` | Report share: version, recipients, source scopes, label ceiling, state (active, held, withdrawn). Instance: owner is the recipient; state (offered, blocked, active, ended with a reason); accepted and offered versions; personal-selector resolutions; triggers with their own webhook endpoint, verified without displaying a secret; budget account. Access check: requirement, result, the principal that ran it (always the recipient). Access request: route, filed as, approved by, state, expiry, the version scope it applies to |
 
 **Retention and deletion (SEC-04).** Retention jobs enforce the spec's §15 data-class table:
@@ -699,14 +708,14 @@ Buy everything that isn't the product, build the enforcement and runtime core th
 - **Defer:** everything marked Defer in §2, everything pending MR review, and everything the spec postpones (§1.1).
 - **Lanes:** A is platform and execution, B is connectors and intake, C is web.
 
-![Build plan · indicative schedule for a team of three](images/tech-build-plan-v0.3.png)
+![Build plan · indicative schedule for a team of three](images/tech-build-plan-v0.5.png)
 
 ### 14.1 Phase 0 — foundations to gate 0
 
 | WP | Work (requirement IDs) | Lane | Engineer-weeks | Exit evidence |
 | --- | --- | --- | --- | --- |
 | P0.1 | Terraform with three egress tiers; CI and SEC-02 scanning; database roles and RLS (SEC-09); WorkOS SSO and SCIM (ADM-01); SEC-01, SEC-03 | A | 4–5 | Two tenants sign in; cross-tenant and wrong-role tests pass |
-| P0.2 | Spikes S1–S11 (§14.4) | All | 4.5–6 | Spike memos; each beta action's duplicate-prevention and recovery class confirmed |
+| P0.2 | Spikes S1–S12 (§14.4) | All | 5–6.5 | Spike memos; each beta action's duplicate-prevention and recovery class confirmed |
 | P0.3 | Fake Graph (mail, delta, 410, Excel, lists, drafts), fake ticketing with one paid action, and external receivers, all with fault injection | B | 3 | Every RUN-07 failure mode can be triggered |
 | P0.4 | Price catalog and ledger (BUD-01, 03, 08, 10, 11; BUD-06 without groups); model adapter (PRV-01, 03, 05; PRV-02 only for a partner's own cloud) | A | 4 | A call without a reservation is refused; concurrency property tests pass |
 | P0.5 | Connector adapters with full CON-12 manifests; broker with account binding (CON-01, 04, 08); grant evaluator (CON-02, 03); CON-06, 07; effect journal; write-ahead audit and sealer (ADM-07, SEC-07); CON-05 personal credentials only if a partner needs it | B | 7–8 | Red-team cases for every grant element pass; an action without a cost model is refused; the chain still verifies after crypto-shredding |
@@ -715,7 +724,7 @@ Buy everything that isn't the product, build the enforcement and runtime core th
 | P0.8 | Web shell (PLT-01 web, PLT-06): React Aria design system, approval card, run timeline (ASG-12), SSE resync, SEC-11 renderer and CSP | C | 4–5 | An action approved end to end; a poisoned item makes 0 cross-origin requests |
 | P0.9 | Thin end-to-end slice; invariant suites; the 26 master-rule release tests and detection queries; injection suite with honeytokens and the injection incident runbook (SEC-02); external red team | All | 6–8 | **Gate 0 report** |
 | P0.10 | Approvals: phishing-resistant authentication (CON-21, §5.8); approver authority, with each beta action's CON-12 access check (ASG-25, §5.9) | C+A | 5–7 | An approval from a non-phishing-resistant session is refused; a delegate without edit access can't approve; the MR-11 release tests pass, except the batch cases, which ship with P1.8 and gate it |
-| P0.11 | Beta security additions: the default label on every output (CON-11); AI disclosure on reply drafts (note and header), ticket bodies, approval-request notifications and snapshot narrative (SEC-14); SEC-15 in its v0.7 form, so nothing executes; the security class refused (SEC-16); reader steps without write tools (SEC-18); the compliance profile and its stop-before-call path (SEC-17) | B | 4–5.5 | Each requirement's acceptance cases pass; a SEC-17 fixture stops before the call |
+| P0.11 | Beta security additions: reading and comparing labels before every write (CON-11, spike S12); AI disclosure on reply drafts (note and header), ticket bodies, approval-request notifications and snapshot narrative (SEC-14); SEC-15 in its v0.7 form, so nothing executes; the security class refused (SEC-16); reader steps without write tools (SEC-18); the compliance profile and its stop-before-call path (SEC-17) | B | 4.5–7 | Each requirement's acceptance cases pass; a SEC-17 fixture stops before the call |
 
 Lane A carries the critical path (P0.1, P0.4, P0.7). Lane C joins it on P0.7's tests once the web shell is done. P0.10 is on the critical path too, because gate 0's master-rule tests need it.
 
@@ -733,7 +742,8 @@ Lane A carries the critical path (P0.1, P0.4, P0.7). Lane C joins it on P0.7's t
 | P1.8 | Batch approval (ASG-11, §5.4), after its MR-11 self-review | C | 2–3 | A batch of fully shown low-impact actions creates one record each; high-impact and over-10-record batches are refused |
 | P1.9 | Efficiency measurement (G6): week-0 time-study protocol and tooling; hands-on-time telemetry on review, approval, correction and repair screens; a sampled time study during the beta; the gate 1 comparison | C+B | 2, plus each partner's week-0 study | Each partner's baseline recorded by request type and complexity before go-live |
 | P1.10 | Signed agent requests, alpha (CON-17–19, §5.7) | B | 1.5–2 | Signatures verify at Cloudflare's test endpoint; the alpha can be switched off |
-| P1.11 | Optional mandate pilot (spec §18.1): ASG-24's controls for queue mandates on one action type with one partner | A+C | 4–6, not counted below | Starts only when all of spec §18.1's conditions hold: the outside re-confirmation of MR-09 and MR-11; internal senders only; the action type's compensation cases passing in the partner's tenant; SEC-13 and every ASG-24 control live; and the queue owner's opt-in |
+| P1.11 | Optional mandate pilot (spec §18.1): ASG-24's controls for queue mandates (ASG-16) on one action type with one partner | A+C | 4–6, not counted below | Starts only when all of spec §18.1's conditions hold: the outside re-confirmation of MR-09 and MR-11; internal senders only; the action type's compensation cases passing in the partner's tenant; SEC-13 and every ASG-24 control live; and the queue owner's opt-in |
+| P1.12 | AI RMF additions: approval-quality signals (ASG-27); AI incident response, tenant notice within 72 hours and a tabletop drill (SEC-20); the outside-feedback contact and form (SEC-22); notice language for people affected, and finding a non-user's data by email address for their access and deletion requests (SEC-19, SEC-04); supplier assessments and the deprecation playbook (PRV-06); evaluation by sender category (SUP-06) | All | 4–5 | A tabletop drill meets the 72-hour notice; every beta provider has a current assessment |
 
 ### 14.3 Timeline
 
@@ -741,13 +751,13 @@ Collicity is one person today. The table shows the schedule at one, two and thre
 
 | Team | Gate 0 | Partners live | Gate 1 |
 | --- | --- | --- | --- |
-| Three engineers | About week 18–22 (13–15) | About week 29–35 (22–26) | About week 37–43 (30–34) |
-| Two engineers | About week 27–33 (18–21) | About week 43–52 (31–36) | About week 51–60 (39–44) |
-| One engineer | About week 53–66 (30–35) | About week 84–104 (51–60) | About week 92–112 (59–68) |
+| Three engineers | About week 18–23 (13–15) | About week 30–37 (22–26) | About week 38–45 (30–34) |
+| Two engineers | About week 27–34 (18–21) | About week 45–56 (31–36) | About week 53–64 (39–44) |
+| One engineer | About week 54–68 (30–35) | About week 89–111 (51–60) | About week 97–119 (59–68) |
 
 These are rough estimates, to be recalibrated after the spikes (P0.2):
 
-- The beta's work grew from about 67–81 engineer-weeks to about 89–111. Most of the growth is CON-21, ASG-25, the master-rule tests, the beta security additions and SEC-13 moving into the beta. The optional mandate pilot adds 4–6 more and isn't counted.
+- The beta's work grew from about 67–81 engineer-weeks to about 93–118. Most of the growth is CON-21, ASG-25, the master-rule tests, the beta security additions, SEC-13 moving into the beta, label reading and the AI RMF additions. The optional mandate pilot adds 4–6 more and isn't counted.
 - The three-engineer row is the engineer-week estimate divided by three, which assumes every lane stays busy; it is optimistic. One engineer delivers at most about one engineer-week a week, so the one-engineer row is the estimate in calendar weeks. v0.2's one-engineer row applied a 2.3× factor that assumed more than that, and understated the time.
 - The 8-week gate 1 window doesn't scale, and each partner's week-0 time study adds about a week before go-live.
 - P1.4 and P1.10 can finish during the window, so they aren't in the time to go-live.
@@ -757,9 +767,9 @@ These are rough estimates, to be recalibrated after the spikes (P0.2):
 
 - **Until the hires join** (about week 13), the founder covers the spikes, P0.1 and partner recruiting: about 10 engineer-weeks.
 - **Each hire's first month** runs at about half speed.
-- **Then, with three engineers,** partners go live at about week 39–45. A 25% contingency on build time gives about week 45–53 (August to October 2027), with gate 1 at about week 53–61.
-- **That leaves about 11 weeks of slack** before the target.
-- **Hiring slips:** each month the hires start after about week 13 pushes the dates out by most of a month. One hire instead of two puts partners live at about December 2027 to February 2028, with no slack.
+- **Then, with three engineers,** partners go live at about week 40–47. A 25% contingency on build time gives about week 47–56 (the end of August to early November 2027), with gate 1 at about week 55–64.
+- **That leaves about 8 weeks of slack** before the target.
+- **Hiring slips:** each month the hires start after about week 13 pushes the dates out by most of a month. One hire instead of two puts partners live at about late December 2027 to March 2028, at or past the target.
 - **Recalibrate** after the spikes (P0.2) and confirm the date then.
 
 **Scope levers (the product owner's call):**
@@ -772,7 +782,7 @@ These are rough estimates, to be recalibrated after the spikes (P0.2):
 - batch approval during the gate 1 window rather than before go-live;
 - no mandate pilot.
 
-### 14.4 Spikes (weeks 1–3)
+### 14.4 Spikes (first, before the hires join)
 
 | # | What to prove | Fallback |
 | --- | --- | --- |
@@ -784,9 +794,10 @@ These are rough estimates, to be recalibrated after the spikes (P0.2):
 | S6 | `untrusted` on real partner mail and attachments: hidden-content recall, offset-map round trips, false positives | Conservative "possibly hidden" flags; plain-text part only |
 | S7 | Token-counting accuracy against the invoice; refusal path; cache hits with the salt; choosing the Bedrock judge; Batches; availability of Claude Platform on AWS and Bedrock in the beta region | A safety multiplier on reservations |
 | S8 | Isolation of `extract` as a Lambda | One Fargate task per file |
-| S9 | Approver authority (ASG-25): for each beta action, reading an approver's own edit access with their token (Excel workbook, SharePoint list item, the ticketing system), and delegate access to another person's mailbox for reply drafts | Only the queue owner approves that action type |
+| S9 | Approver authority (ASG-25): for each beta action, reading an approver's own edit access with their token (Excel workbook, SharePoint list item, the ticketing system), and a delegate's access to a shared mailbox for reply drafts | Only the queue owner approves that action type |
 | S10 | Phishing-resistant assertions (CON-21): whether WorkOS passes Entra's authentication-strength or `amr` claims, and Okta's, for the approving session | A WebAuthn ceremony for every approval gesture |
 | S11 | Signed agent requests (CON-17–19): KMS Ed25519 signing latency and request quotas; Cloudflare's test endpoint; the directory's proof signatures | In-memory keys rotated daily, or the alpha switched off |
+| S12 | Labels (CON-11): reading `msip_labels` from mail headers and mapping them to label names through Graph; reading labels embedded in attachments; reading the labels of the workbooks and files the beta writes to; setting a label on a reply draft; how many partner targets are unlabeled | Where a target's label can't be read, writes of labeled content to it are blocked (MR-08); where Graph can't set a draft's label, a marking in its AI note |
 
 **Week-1 prerequisites:**
 
@@ -813,6 +824,7 @@ These are rough estimates, to be recalibrated after the spikes (P0.2):
   - after MR review: mandates (ASG-24), queue mandates with the external-sender policy (ASG-16), mandate suggestions (ASG-26) and publishing mandates for recurring report shares (ASG-19);
   - sharing (ASG-18–23, §4.5): recurring report shares, per-recipient instances, the access precheck and access requests;
   - BUD-06 groups, 07 and 09;
+  - the risk-tolerance record and retirement checklist (SEC-21);
   - RTR-06, SUP-05 and INV-04 (SEC-13 moved into the beta);
   - TPL-01–07, using Vega-Lite charts and exports rendered with no network access;
   - SCH-01, 02, 07 and 08; QA-04–06; ADM-04 and 08.
@@ -849,6 +861,7 @@ Each invariant has its own automated suite that must pass at zero violations; to
 | Master rules (spec §19) | Each rule's release test passes, and each detection query finds the violations planted for it | One test module per rule, tagged MR-xx; detection queries replayed over seeded audit data with planted violations |
 | Approvals (ASG-11, ASG-25, CON-21) | A batch creates one record per action; high-impact and over-10-record batches are refused; a non-phishing-resistant session can't approve; an approver without access can't approve | Playwright with virtual WebAuthn authenticators; fake IdP tokens with and without phishing-resistant claims; access-check fakes |
 | Efficiency (G6) | Telemetry attributes hands-on minutes to the right request and stage | Scripted session replays compared with stopwatch timings |
+| AI incidents (SEC-20) | Containment, assessment and tenant notice within 72 hours | A tabletop drill before partners go live, and again before GA |
 | Sharing (GA) | A recipient's runs, prechecks and dry runs use only the recipient's tokens and budgets; every run's version was accepted by its owner for its instance; a request filed in a target was approved by the person it was filed as; precheck results reach the owner only for resources the owner can read; an edition with a source outside the confirmed scopes is held | Fixtures with two people and two instances; red-team cases for bait-and-switch versions, probing undeclared resources and request abuse |
 
 **The injection suite (invariant 5, SEC-02)**
@@ -885,7 +898,7 @@ Each invariant has its own automated suite that must pass at zero violations; to
 
 ## 16. Technical risks
 
-The riskiest assumptions are tested in the first three weeks (§14.4); each has a fallback that keeps the beta on track.
+The riskiest assumptions are tested first, in the spikes the founder runs before the hires join (§14.4); each has a fallback that keeps the beta on track.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
@@ -900,13 +913,14 @@ The riskiest assumptions are tested in the first three weeks (§14.4); each has 
 | Per-tenant KMS keys at Home scale (Phase 3) | A KMS key costs $1 a month, plus $1 a month for each of its first two rotations; three purpose keys per account cost $3–9 a month, or $300,000–900,000 a month for 100,000 Home accounts | Before Home, revisit SEC-01's per-tenant keys for Home accounts: one key per account with the purpose in the encryption context, or per-account data keys under shared KMS keys |
 | Collicity is one person until the two hires join | Each month they start after about week 13 pushes the dates out by most of a month | Recruit now; until the hires join, the founder covers the spikes, infrastructure and partner recruiting; buy list; scope levers (§14.3) |
 | Approver authority can't be read for some beta actions (S9) | Delegates can't approve those actions | Owner-only approval for them (§18) |
+| Labels can't be read from some beta targets, or many partner targets are unlabeled (S12) | Writes of labeled content to them are blocked until a person labels the target | Count unlabeled targets in the spike and in week 0; label them during onboarding (§18) |
 | WorkOS doesn't pass phishing-resistant claims (S10) | A passkey ceremony on every approval gesture | One touch per batch; watch its effect on G6 |
 | Signing adds latency or hits KMS quotas (S11) | Slower connector calls | In-memory keys, or the alpha switched off |
 | WebKitGTK behavior in Tauri (GA) | Desktop parity or accessibility | One-week spike at the start of Phase 2; Electron fallback |
 
-## 17. Spec changes adopted in v0.5
+## 17. Changes adopted in spec v0.5
 
-This section is a record of v0.5. Later spec versions changed some of these changes: pre-authorization became mandates (pending MR review), and in the beta each compensation needs its own approval. §1.1 and §18 give the current position.
+This section is a record of v0.5. Later spec versions changed some of these changes: pre-authorization became mandates (pending MR review), and in the beta each compensation needs its own approval. §1.1 and §5.4 give the current position.
 
 The product owner approved the 18 changes this document proposed. Spec v0.5 adopts them, refined in an independent review, together with the knock-on edits they needed.
 
@@ -937,52 +951,59 @@ Spec v0.5 also records the product owner's decision on sharing (§7.7, ASG-18 to
 
 ## 18. Gaps, conflicts and design choices
 
-These came up while bringing this design in line with spec v0.17. None is resolved silently: where the design needed an answer to proceed, it records the one it uses and flags it here for the product owner. The spec's own blocking questions (§21: design partners, beta region, target date, database-row keys, runtime defaults, outside recipients on beta snapshots) still stand.
+Spec v0.19, the beta baseline, resolved the conflicts and rulings v0.4 raised:
 
-**Conflicts inside the spec**
+- the acceptance cases for compensations and AI disclosure;
+- the hard-line wording;
+- cited Q&A answers;
+- delegates connecting their own accounts;
+- compensating deletes;
+- the approver's decision in invariant 2;
+- label comparison, unlabeled and unreadable targets, and beta compliance profiles;
+- reply-draft approvals;
+- unapproved compensations;
+- custom connectors at GA;
+- the G6 method;
+- the pilot's reviewer.
 
-| # | Conflict | Where | What v0.3 does | Needs |
+What remains is feasibility, which the spikes settle, and design choices for the product owner, each with this design's recommendation. The spec's own open items (§21: design partners, beta region, hiring) still stand.
+
+**Feasibility, settled by spikes**
+
+| # | Question | Where | Spike | Fallback |
 | --- | --- | --- | --- | --- |
-| 1 | A beta acceptance case expects a compensation under the original approval, but the beta requires each compensation's own approval | Spec §18.1 against §1's interim table and RUN-06 | Tests compensation approvals in the beta; the original-approval case waits for MR review | Reword the case for the beta |
-| 2 | A beta acceptance case expects the AI disclosure in reply-draft headers, but the beta requires a visible note | §18.1 against §1 (MR-17) and SEC-14 | Drafts carry a visible note and a header | Reword the case |
-| 3 | Two §21 entries still name only "unlocking or disarming" as the home-security hard line | §21: the v0.8 decision record and the open question on hard lines | — | Align with PAY-08's four actions, if wanted |
-| 4 | A beta compliance profile that requires source labels would stop every step, because beta connectors don't read labels | SEC-17 against CON-11's beta default | Beta profiles can't require source labels | Decide |
-| 5 | RUN-08 says no summary comes from a model's own account, but Q&A answers history questions in model-written prose | RUN-08 against QA-01 | Q&A answers cite run records and never set a status | Say that cited Q&A answers are allowed |
-| 6 | The mandate pilot needs an outside re-confirmation during the beta, but the planned reviewer, the penetration tester, comes before GA | §18.1 against §1 and SEC-02 | P1.11 stays conditional | Line up a design partner's security team if the pilot matters |
-| 7 | G6 compares a week-0 time study with beta telemetry, which measure differently | §18.1 and §19 | Also runs a sampled time study during the beta, with telemetry as a cross-check | Confirm the method with the partners |
+| 1 | Reading each approver's own access for every beta action, including delegates on shared mailboxes | ASG-25 | S9 | Only the queue owner approves that action type |
+| 2 | Whether the partner ticketing system offers a per-user access check | CON-12, ASG-25 | S9, once the system is named | Choose a system that does, or owner-only approval |
+| 3 | Whether WorkOS passes Entra's or Okta's phishing-resistant claims | CON-21 | S10 | A WebAuthn ceremony for every approval gesture |
+| 4 | Reading labels from mail headers, attachments and the files the beta writes to, and setting one on a reply draft | CON-11 | S12 | Where a target's label can't be read, writes of labeled content to it are blocked (MR-08); where Graph can't set a draft's label, a marking in its AI note |
+| 5 | Tool-description poisoning cases, which need remote MCP servers | SEC-02, CON-13 | — | Added at GA |
 
-**Gaps and feasibility questions**
+**Design choices**
 
-| # | Gap | Where | What v0.3 does | Needs |
-| --- | --- | --- | --- | --- |
-| 8 | A delegate usually can't write drafts in the queue owner's personal mailbox, and Graph exposes mailbox delegate permissions poorly, so ASG-25 may limit reply-draft approvals to the owner | ASG-25 and §18.1 | Spike S9; fallback: only the queue owner, or delegates on shared mailboxes, approve drafts | Choose the fallback |
-| 9 | ASG-25 needs each delegate's own token, so delegates must connect Graph and the ticketing system themselves; §18.1's roles don't say so | ASG-25 and CON-08 | Asks delegates to connect before their first approval | Add to §18.1's roles |
-| 10 | The partner ticketing system may have no per-user access check | CON-12 and ASG-25 | Spike S9 once the system is named | Choose a system that has one, or owner-only approval |
-| 11 | WorkOS may not pass Entra's or Okta's phishing-resistant claims through | CON-21 | Spike S10; fallback: a WebAuthn ceremony per approval gesture | — |
-| 12 | CON-11's beta default needs the tenant's labels and their order | CON-11 | Reads Purview labels through Graph, which needs a label-read permission, or lets the admin enter them | Choose |
-| 13 | v0.17 doesn't restate what happens when no one approves a compensation in the beta | RUN-06 interim | Uses v0.7's rule: after the ASG-10 timeout, the effect stays applied and the run ends Completed with partial side effects | Confirm |
-| 14 | Your brief said to postpone "sandboxed custom code", but the spec postpones model-written code and queries and browser automation (SEC-15); custom connectors still run in a sandbox at GA (CON-14, spec §16) | SEC-15 and CON-14 | Keeps custom connectors at GA, and marks only model-written code, queries and browser automation as postponed | Confirm, or postpone custom connectors too |
-| 15 | Labels can't be put on most beta writes: an Excel row carries a label only by relabeling the workbook, which SEC-16 refuses in the beta; list items and tickets can't hold one; and a snapshot with the tenant's top label may be blocked by SEC-10's admin label rules | CON-11, MR-08, SEC-10, SEC-16 | Records the label on the effect, lineage and approval screen; drafts carry it in their AI note (§5.5) | Rule whether a field write into a lower-labeled container is a downgrade |
-| 16 | The beta's compensations delete things (a created list item, a reply draft), but §18.1 says deleting records is out of the beta | Spec §18.1 | Treats a compensating delete as a high-impact action with its own approval and delete permission (§5.4) | Say that compensating deletes are allowed in the beta |
-| 17 | Invariant 2 names only the precheck as an authorization for access checks, but ASG-25 runs an access check on every approver | Invariant 2, ASG-21, ASG-25 | Authorizes the check by the approver's own decision, on its own gateway path (§5.9) | Add the approver's decision to invariant 2 |
-| 18 | SEC-02's tool-description poisoning cases can't run in the beta, which has no remote MCP servers | SEC-02, CON-13 | Adds them at GA; the beta suite has every other case and the incident runbook (§15, P0.9) | — |
-| 19 | This design follows spec v0.17, not v0.16 as asked, because v0.17 was published first in the same request; it differs only in naming all four PAY-08 actions as a hard line | — | Companion to v0.17 | — |
-
-**Design choices for the product owner**
-
-| # | Choice | Where | What v0.3 recommends |
+| # | Choice | Where | What this design recommends |
 | --- | --- | --- | --- |
-| 20 | Web Bot Auth key custody: a KMS key with a Sign call per request, or in-memory keys rotated daily | CON-19; spec §16 leaves it to this design | KMS for the beta, measured in spike S11 (§5.7) |
-| 21 | Approval authentication: a WebAuthn ceremony per gesture, or an IdP session assertion, and if so how recent | CON-21 | A ceremony per gesture, bound to the approved hashes, one touch per batch (§5.8); this costs a touch per gesture against G6 |
-| 22 | Approver checks cached up to 5 minutes, and not re-run at consumption | ASG-25 | As stated (§5.9) |
-| 23 | Webhook triggers (GA): signed by the sender, or a secret the sender generates and the recipient enters into the vault | ASG-20 and MR-03 | Either; Collicity never displays a secret (§4.5) |
-| 24 | The screening classifier: the cross-family judge model or a dedicated guard model | SEC-13 | Chosen in spike S7 (§7.4) |
-| 25 | SEC-17 in the beta: a full compliance profile or a minimal one for the known partners | SEC-17 | Minimal, as a scope lever (§14.3) |
+| 6 | Web Bot Auth key custody: a KMS key with a Sign call per request, or in-memory keys rotated daily | CON-19 | KMS for the beta, measured in spike S11 (§5.7) |
+| 7 | Approval authentication: a WebAuthn ceremony per gesture, or an IdP session assertion, and if so how recent | CON-21 | A ceremony per gesture, bound to the approved hashes, one touch per batch; watch its cost to G6 (§5.8) |
+| 8 | Approver checks cached up to 5 minutes, and not re-run at consumption | ASG-25 | As stated (§5.9) |
+| 9 | Webhook triggers (GA): signed by the sender, or a secret the sender generates and the recipient enters into the vault | ASG-20, MR-03 | Either; Collicity never displays a secret (§4.5) |
+| 10 | The screening classifier: the cross-family judge model or a dedicated guard model | SEC-13 | Chosen in spike S7 (§7.4) |
+| 11 | SEC-17 in the beta: a full compliance profile or a minimal one for the known partners | SEC-17 | Minimal, as a scope lever (§14.3) |
+
+**Open before the GA build: sharing mechanics** (spec §21 hands these to this design)
+
+| # | Question | Where | What this design recommends |
+| --- | --- | --- | --- |
+| 12 | Which budget pays for the access checks that run when a recipient opens a share | ASG-21 | The recipient's workspace budget, like the dry run (§4.5) |
+| 13 | What happens when the post-acceptance dry run can't read something | ASG-21 | The instance stays blocked, shows the failing requirement and offers an access request (ASG-22) |
+| 14 | How personal selectors, which resolve at acceptance after the precheck, are checked | ASG-20, ASG-21 | Access-check each resolved resource at acceptance; the dry run then covers them |
+| 15 | Whether the precheck tests Auto against RTR-02's fallback, not only the curated default | ASG-21, RTR-02 | Test every model the recipient's eligibility (RTR-01) allows for each task, and warn when only the fallback qualifies |
+| 16 | What SEC-10's label rules mean for disclosing standing instructions to recipients, a product question | SEC-10, ASG-23 | Instructions carry the highest label of the sources they name or quote, and the acceptance screen withholds what the recipient can't read |
 
 ## Revision history
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| v0.5 | 2026-10-11 | Follows spec v0.19, the beta baseline, which resolved v0.4's spec conflicts and rulings. Labels are now read from mail headers, attachments and through Graph and compared before every write; labeled content goes to an unlabeled or unreadable target only after a person labels it, with spike S12 (§5.5, §8.2, P0.11). Reply drafts in personal mailboxes are approved by their owner (§5.5). Adds P1.12 for the AI RMF additions (ASG-27, PRV-06, SEC-19, SEC-20, SEC-22, SUP-06), with its data model and an incident drill (§12, §15). The beta grows to 103 named requirement IDs and about 93–118 engineer-weeks; the schedule and target-date slack (now about 8 weeks) are updated, with a new build-plan diagram (§14). §18 keeps only the feasibility questions and design choices, and adds the sharing mechanics spec §21 hands to this design |
 | v0.4 | 2026-10-10 | Follows spec v0.18, which sets the team at three (the founder and two engineers joining within about three months) and the target date: design partners live by 2027-12-31, gate 1 by about 2028-03-31. Adds a two-engineer row, the target-date schedule with hiring time and contingency, and the hiring risk (§1, §14.3, §16) |
 | v0.3 | 2026-10-10 | Follows spec v0.17; v0.2 followed v0.5. The beta grows from 82 to 98 named requirement IDs. New: a master-rule map showing what's pending MR review (§1.1); approvals with batches, 15-minute beta validity and compensation approvals (§4, §5.4, §5.5); signed agent requests, alpha (§5.7); phishing-resistant approvals (§5.8); approver authority (§5.9); injection screening in the beta (§7.4); quarantined reading (§8.5); labels, disclosure, honest status, no spawning and the compliance profile; master-rule detection (§10); efficiency measurement (P1.9); new work packages, spikes S9–S11 and a schedule at one engineer and at three (§14); model-written code, queries and browser automation postponed; and the gaps, conflicts and design choices for the product owner (§18) |
 | v0.2 | 2026-10-05 | Updated for spec v0.5, which adopts this document's 18 proposed changes: §17 now records where each landed, and cross-references cite the spec instead of proposals. Review findings folded in: per-tenant KMS keys (SEC-01); the workspace budget (BUD-11); compensations under pre-authorizations and grants; custodian visibility; resumed runs and the concurrency cap; content-hash matching across scopes; blind-index deletion on crypto-shredding; deprovisioning signals and directory polling; a Home-scale key-cost risk; a design for sharing (§4.5), reworked after an adversarial review of the sharing rules; fixes from a final review: compensations in the write path and tests, reservations for paid connector actions, key purposes and rotation, the chat budget, the router's fallback when the default isn't eligible, human steps inside branches and loops, all BUD-05 alert channels, suspension versus pause, and re-admitting runs paused before their first step |
@@ -990,7 +1011,7 @@ These came up while bringing this design in line with spec v0.17. None is resolv
 
 ## Sources
 
-- *Collicity — Product Specification (Draft v0.17)*, and in `docs/archive/` the earlier specs, including v0.7 with the master rules' original wording, and the compliance-assistant plans v3 and v3.1 with their acceptance cases.
+- *Collicity — Product Specification (Draft v0.19)*, and in `docs/archive/` the earlier specs, including v0.7 with the master rules' original wording, and the compliance-assistant plans v3 and v3.1 with their acceptance cases.
 - [Microsoft Entra: develop a SCIM endpoint](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups): provisioning cycles run about every 40 minutes (§5.6).
 - [Microsoft Entra: continuous access evaluation](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation): critical events, including a disabled user, can take up to 15 minutes to propagate (§5.6).
 - [Claude Platform on AWS](https://platform.claude.com/docs/en/build-with-claude/claude-platform-on-aws): Anthropic-operated access with SigV4 authentication and AWS billing (§2).
@@ -1004,3 +1025,4 @@ These came up while bringing this design in line with spec v0.17. None is resolv
 - [AWS KMS Sign](https://docs.aws.amazon.com/kms/latest/APIReference/API_Sign.html): Ed25519 signing with `ECC_NIST_EDWARDS25519` keys (§5.7).
 - [W3C Web Authentication](https://www.w3.org/TR/webauthn-3/): the ceremony behind per-gesture approvals (§5.8).
 - [Microsoft Entra: authentication strengths](https://learn.microsoft.com/en-us/entra/identity/authentication/concept-authentication-strengths): phishing-resistant MFA as a Conditional Access requirement (§5.8).
+- *Collicity — AI RMF Alignment (Draft v0.1)*, in `docs/`: the AI RMF gaps behind P1.12.
