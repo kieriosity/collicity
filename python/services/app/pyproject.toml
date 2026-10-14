@@ -1,0 +1,19 @@
+[project]
+name = "collicity-app"
+version = "0.1.0"
+description = "The app service: REST API, Server-Sent Events, webhooks, admin console API"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "collicity-core",
+    "collicity-db",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[tool.uv.sources]
+collicity-core = { workspace = true }
+collicity-db = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"

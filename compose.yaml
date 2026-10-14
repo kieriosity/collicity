@@ -1,0 +1,23 @@
+# Local development services. `just dev` starts them, creates the roles and migrates.
+# Temporal's dev server, LocalStack (S3, KMS, Lambda) and the fakes join as their work packages land.
+name: collicity
+
+services:
+  postgres:
+    # Aurora PostgreSQL 17 in AWS (technical design §2).
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres-local-only
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

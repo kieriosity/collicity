@@ -6,3 +6,16 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Local environment
+.env
