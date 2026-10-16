@@ -1,7 +1,7 @@
 """ORM mappings for the tables the migrations create.
 
 Migrations are hand-written SQL, because row-level security, policies and grants are the point
-of them. These mappings must match; ``tests/test_schema.py`` fails when they drift.
+of them. These mappings must match; ``tests/test_migrations.py`` fails when they drift.
 """
 
 from datetime import datetime
@@ -9,12 +9,16 @@ from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
+    Computed,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     MetaData,
+    SmallInteger,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -87,3 +91,158 @@ class RoleGrant(Base):
     principal_id: Mapped[UUID] = mapped_column(primary_key=True)
     role: Mapped[str] = mapped_column(primary_key=True)
     granted_at: Mapped[datetime]
+
+
+class PriceVersion(Base):
+    """A published price catalog version (BUD-08). Immutable."""
+
+    __tablename__ = "price_version"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(unique=True)
+    effective_at: Mapped[datetime]
+    source: Mapped[str]
+    published_at: Mapped[datetime]
+
+
+class PriceItem(Base):
+    """``micro_usd`` per ``unit_size`` units of ``meter`` for ``sku``, from ``tier_floor`` up."""
+
+    __tablename__ = "price_item"
+
+    price_version_id: Mapped[UUID] = mapped_column(ForeignKey("price_version.id"), primary_key=True)
+    sku: Mapped[str] = mapped_column(primary_key=True)
+    meter: Mapped[str] = mapped_column(primary_key=True)
+    tier_floor: Mapped[int] = mapped_column(primary_key=True, server_default=text("0"))
+    unit_size: Mapped[int]
+    micro_usd: Mapped[int]
+
+
+class Budget(Base):
+    """A limit per period for the organization, a person, an assignment or a workspace."""
+
+    __tablename__ = "budget"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        UniqueConstraint(
+            "tenant_id",
+            "scope",
+            "principal_id",
+            "assignment_id",
+            "period",
+            postgresql_nulls_not_distinct=True,
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "principal_id"], ["principal.tenant_id", "principal.id"]
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenant.id"))
+    scope: Mapped[str]
+    principal_id: Mapped[UUID | None]
+    assignment_id: Mapped[UUID | None]
+    period: Mapped[str]
+    limit_micro_usd: Mapped[int]
+    lock_rank: Mapped[int] = mapped_column(
+        SmallInteger,
+        Computed(
+            "CASE scope WHEN 'organization' THEN 10 WHEN 'user' THEN 30 ELSE 40 END",
+            persisted=True,
+        ),
+    )
+    created_at: Mapped[datetime]
+
+
+class LedgerAccount(Base):
+    """One budget's balance for one period."""
+
+    __tablename__ = "ledger_account"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        UniqueConstraint("budget_id", "period_start"),
+        ForeignKeyConstraint(["tenant_id", "budget_id"], ["budget.tenant_id", "budget.id"]),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    budget_id: Mapped[UUID]
+    period_start: Mapped[datetime]
+    limit_micro_usd: Mapped[int]
+    spent_micro_usd: Mapped[int]
+    reserved_micro_usd: Mapped[int]
+    lock_rank: Mapped[int] = mapped_column(SmallInteger)
+    created_at: Mapped[datetime]
+
+
+class Reservation(Base):
+    """A worst-case hold for one billable operation (BUD-03)."""
+
+    __tablename__ = "reservation"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "principal_id"], ["principal.tenant_id", "principal.id"]
+        ),
+        Index(
+            "reservation_expires_at_idx",
+            "expires_at",
+            postgresql_where=text("state IN ('active', 'started')"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenant.id"))
+    principal_id: Mapped[UUID]
+    assignment_id: Mapped[UUID | None]
+    price_version_id: Mapped[UUID] = mapped_column(ForeignKey("price_version.id"))
+    purpose: Mapped[str]
+    amount_micro_usd: Mapped[int]
+    actual_micro_usd: Mapped[int | None]
+    state: Mapped[str]
+    created_at: Mapped[datetime]
+    expires_at: Mapped[datetime]
+    started_at: Mapped[datetime | None]
+    finished_at: Mapped[datetime | None]
+
+
+class ReservationAccount(Base):
+    """Which ledger accounts a reservation holds against."""
+
+    __tablename__ = "reservation_account"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "reservation_id"], ["reservation.tenant_id", "reservation.id"]
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "ledger_account_id"], ["ledger_account.tenant_id", "ledger_account.id"]
+        ),
+    )
+
+    tenant_id: Mapped[UUID]
+    reservation_id: Mapped[UUID] = mapped_column(primary_key=True)
+    ledger_account_id: Mapped[UUID] = mapped_column(primary_key=True)
+
+
+class LedgerEntry(Base):
+    """An append-only record of one balance change."""
+
+    __tablename__ = "ledger_entry"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "ledger_account_id"], ["ledger_account.tenant_id", "ledger_account.id"]
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "reservation_id"], ["reservation.tenant_id", "reservation.id"]
+        ),
+        Index("ledger_entry_tenant_id_ledger_account_id_idx", "tenant_id", "ledger_account_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    ledger_account_id: Mapped[UUID]
+    reservation_id: Mapped[UUID]
+    kind: Mapped[str]
+    reserved_delta: Mapped[int]
+    spent_delta: Mapped[int]
+    created_at: Mapped[datetime]

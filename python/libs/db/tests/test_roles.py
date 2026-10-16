@@ -1,7 +1,8 @@
-"""SEC-09 by structure: service roles own nothing, bypass nothing and hold only listed grants.
+"""SEC-09 by structure: roles own nothing, bypass nothing and hold only listed privileges.
 
-These tests read the catalog, so they also cover tables that future migrations add: a new table
-without forced RLS, or a new privilege missing from EXPECTED_TABLE_GRANTS, fails here.
+These tests read the catalog, so they also cover what future migrations add: a new table without
+forced RLS, a new privilege or a new SECURITY DEFINER function missing from the lists below
+fails here, and every widening of access shows up in review.
 """
 
 import pytest
@@ -9,28 +10,79 @@ from sqlalchemy import Connection, text
 from sqlalchemy.exc import InternalError, ProgrammingError
 
 from collicity_db import Role
-from collicity_db.roles import SERVICE_ROLES
+from collicity_db.roles import SERVICE_ROLES, DefinerRole
 from collicity_testing.postgres import MigratedDatabase
 
+OUR_SCHEMAS = ("public", "ledger", "sweep")
+
 # Tables that hold no tenant data and so carry no tenant RLS. Keep this list short.
-GLOBAL_TABLES = {"alembic_version"}
+GLOBAL_TABLES = {"alembic_version", "price_version", "price_item"}
 
 # The tenant predicate each tenant table's isolation policy must use, as Postgres deparses it.
 TENANT_PREDICATE = "(tenant_id = current_tenant_id())"
 TENANT_PREDICATE_OVERRIDES = {"tenant": "(id = current_tenant_id())"}
+# Roles a tenant_isolation policy may name: every service role, plus definer roles that RLS
+# must still bind inside their functions.
+TENANT_POLICY_ROLES = {r.value for r in SERVICE_ROLES} | {DefinerRole.LEDGER.value}
+# Policies other than tenant_isolation and migrator_all: (table, name) -> (roles, command).
+EXTRA_POLICIES = {("reservation", "sweeper_scan"): (["sweeper"], "SELECT")}
 
-# Every table privilege a service role holds. A migration that grants more must update this,
-# so each widening of access shows up in review.
-_READ_TENANCY = {
-    ("tenant", "SELECT"),
-    ("principal", "SELECT"),
-    ("role_grant", "SELECT"),
+_READ_TENANCY = {("tenant", "SELECT"), ("principal", "SELECT"), ("role_grant", "SELECT")}
+_READ_PRICES = {("price_version", "SELECT"), ("price_item", "SELECT")}
+_READ_LEDGER = {
+    (table, "SELECT")
+    for table in ("budget", "ledger_account", "reservation", "reservation_account", "ledger_entry")
 }
-EXPECTED_TABLE_GRANTS: dict[Role, set[tuple[str, str]]] = {
-    Role.APP_USER: _READ_TENANCY,
-    Role.APP_WORKER: _READ_TENANCY,
-    Role.GW: _READ_TENANCY,
+EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
+    "app_user": _READ_TENANCY | _READ_PRICES | _READ_LEDGER,
+    "app_worker": _READ_TENANCY | _READ_PRICES | _READ_LEDGER,
+    "gw": _READ_TENANCY | _READ_PRICES | {("reservation", "SELECT")},
+    "ledger_definer": {
+        ("budget", "SELECT"),
+        ("ledger_account", "SELECT"),
+        ("ledger_account", "INSERT"),
+        ("ledger_account", "UPDATE"),
+        ("reservation", "SELECT"),
+        ("reservation", "INSERT"),
+        ("reservation", "UPDATE"),
+        ("reservation_account", "SELECT"),
+        ("reservation_account", "INSERT"),
+        ("ledger_entry", "INSERT"),
+    },
+    "sweeper": set(),
 }
+EXPECTED_COLUMN_GRANTS: dict[str, set[tuple[str, str, str]]] = {
+    "sweeper": {
+        ("reservation", column, "SELECT") for column in ("id", "tenant_id", "state", "expires_at")
+    },
+}
+# Functions each role may execute, other than those it owns.
+EXPECTED_EXECUTE: dict[str, set[str]] = {
+    "app_user": {
+        "current_tenant_id()",
+        "current_principal_id()",
+        "ledger.reserve(uuid,uuid,uuid,bigint,uuid,text,interval)",
+        "ledger.release(uuid)",
+    },
+    "app_worker": {
+        "current_tenant_id()",
+        "current_principal_id()",
+        "ledger.reserve(uuid,uuid,uuid,bigint,uuid,text,interval)",
+        "ledger.release(uuid)",
+        "ledger.expire(uuid)",
+        "sweep.due_for_expiry(integer)",
+    },
+    "gw": {
+        "current_tenant_id()",
+        "current_principal_id()",
+        "ledger.release(uuid)",
+        "ledger.start(uuid,uuid,uuid,bigint,interval)",
+        "ledger.settle(uuid,bigint)",
+    },
+    "ledger_definer": {"current_tenant_id()"},
+    "sweeper": set(),
+}
+CHECKED_ROLES = tuple(EXPECTED_TABLE_GRANTS)
 
 
 def _admin(database: MigratedDatabase) -> Connection:
@@ -58,6 +110,29 @@ def test_service_roles_have_no_elevated_attributes_or_memberships(
             {"r": role.value},
         ).scalar_one()
         assert memberships == 0
+
+
+@pytest.mark.parametrize("role", DefinerRole)
+def test_definer_roles_cannot_log_in_and_only_migrator_can_become_them(
+    database: MigratedDatabase, role: DefinerRole
+):
+    with _admin(database) as conn:
+        attrs = conn.execute(
+            text(
+                "SELECT rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb "
+                "FROM pg_roles WHERE rolname = :r"
+            ),
+            {"r": role.value},
+        ).one()
+        assert not any(attrs)
+        members = conn.execute(
+            text(
+                "SELECT m.member::regrole::text FROM pg_auth_members m "
+                "WHERE m.roleid = CAST(:r AS regrole)"
+            ),
+            {"r": role.value},
+        ).scalars()
+        assert set(members) == {"migrator"}
 
 
 def test_migrator_cannot_bypass_rls_either(database: MigratedDatabase):
@@ -89,7 +164,9 @@ def test_every_table_is_global_or_under_forced_tenant_rls(database: MigratedData
     with _admin(database) as conn:
         tables = conn.execute(
             text(
-                "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity "
+                "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity, "
+                "EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid "
+                "        AND a.attname = 'tenant_id' AND NOT a.attisdropped) AS has_tenant "
                 "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
                 "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') "
                 "AND n.nspname NOT LIKE 'pg_toast%' AND c.relkind IN ('r', 'p')"
@@ -103,8 +180,9 @@ def test_every_table_is_global_or_under_forced_tenant_rls(database: MigratedData
         }
 
     assert tables, "the migrations created no tables"
-    for name, rls, forced in tables:
+    for name, rls, forced, has_tenant in tables:
         if name in GLOBAL_TABLES:
+            assert not has_tenant, f"{name} holds tenant data, so it can't be global"
             continue
         assert rls, f"{name} must ENABLE row level security"
         assert forced, f"{name} must FORCE row level security"
@@ -113,38 +191,103 @@ def test_every_table_is_global_or_under_forced_tenant_rls(database: MigratedData
         predicate = TENANT_PREDICATE_OVERRIDES.get(name, TENANT_PREDICATE)
         assert policy.qual == predicate, name
         assert policy.with_check == predicate, name
-        assert set(policy.roles) == {r.value for r in SERVICE_ROLES}, name
-        # Every other policy on the table belongs to migrator alone; a second permissive
-        # policy for a service role would widen what it sees.
-        others = [p for (t, n), p in policies.items() if t == name and n != "tenant_isolation"]
-        assert all(p.roles == ["migrator"] for p in others), name
+        assert {r.value for r in SERVICE_ROLES} <= set(policy.roles) <= TENANT_POLICY_ROLES, name
+
+        # Any further policy is migrator's or listed above: a second permissive policy for a
+        # service role would widen what it sees.
+        for (table, policy_name), other in policies.items():
+            if table != name or policy_name == "tenant_isolation":
+                continue
+            if policy_name == "migrator_all":
+                assert other.roles == ["migrator"], name
+                continue
+            expected = EXTRA_POLICIES.get((table, policy_name))
+            assert expected is not None, f"unexpected policy {policy_name} on {name}"
+            assert (other.roles, other.cmd) == expected, policy_name
 
 
-def test_service_role_grants_match_the_expected_list(database: MigratedDatabase):
+def test_table_and_column_grants_match_the_expected_lists(database: MigratedDatabase):
+    roles = {"roles": list(CHECKED_ROLES)}
     with _admin(database) as conn:
         rows = conn.execute(
             text(
                 "SELECT grantee, table_name, privilege_type "
-                "FROM information_schema.role_table_grants "
-                "WHERE grantee IN ('app_user', 'app_worker', 'gw')"
-            )
+                "FROM information_schema.role_table_grants WHERE grantee = ANY (:roles)"
+            ),
+            roles,
         ).all()
-        column_grants = conn.execute(
+        column_rows = conn.execute(
             text(
                 "SELECT grantee, table_name, column_name, privilege_type "
                 "FROM information_schema.column_privileges "
-                "WHERE grantee IN ('app_user', 'app_worker', 'gw') "
+                "WHERE grantee = ANY (:roles) "
                 "AND (grantee, table_name, privilege_type) NOT IN ("
                 "  SELECT grantee, table_name, privilege_type "
                 "  FROM information_schema.role_table_grants)"
-            )
+            ),
+            roles,
         ).all()
 
-    actual: dict[Role, set[tuple[str, str]]] = {role: set() for role in SERVICE_ROLES}
+    actual: dict[str, set[tuple[str, str]]] = {role: set() for role in CHECKED_ROLES}
     for grantee, table, privilege in rows:
-        actual[Role(grantee)].add((table, privilege))
+        actual[grantee].add((table, privilege))
     assert actual == EXPECTED_TABLE_GRANTS
-    assert column_grants == []
+
+    actual_columns: dict[str, set[tuple[str, str, str]]] = {}
+    for grantee, table, column, privilege in column_rows:
+        actual_columns.setdefault(grantee, set()).add((table, column, privilege))
+    assert actual_columns == EXPECTED_COLUMN_GRANTS
+
+
+def _function_acl(conn: Connection) -> list[tuple[str, str, str, bool, list[str] | None]]:
+    """(function, owner, grantee, security definer, config) for every EXECUTE grant."""
+    return [
+        tuple(row)  # type: ignore[misc]
+        for row in conn.execute(
+            text(
+                "SELECT p.oid::regprocedure::text, p.proowner::regrole::text, "
+                "       CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE a.grantee::regrole::text END, "
+                "       p.prosecdef, p.proconfig "
+                "FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                "CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a "
+                "WHERE n.nspname = ANY (:schemas) AND a.privilege_type = 'EXECUTE'"
+            ),
+            {"schemas": list(OUR_SCHEMAS)},
+        )
+    ]
+
+
+def test_no_function_is_executable_by_public(database: MigratedDatabase):
+    with _admin(database) as conn:
+        public = [fn for fn, _, grantee, _, _ in _function_acl(conn) if grantee == "PUBLIC"]
+    assert public == []
+
+
+def test_execute_grants_match_the_expected_list(database: MigratedDatabase):
+    with _admin(database) as conn:
+        acl = _function_acl(conn)
+    actual: dict[str, set[str]] = {role: set() for role in CHECKED_ROLES}
+    for fn, owner, grantee, _, _ in acl:
+        if grantee in actual and grantee != owner:
+            actual[grantee].add(fn)
+    assert actual == EXPECTED_EXECUTE
+
+
+def test_security_definer_functions_have_a_definer_owner_and_a_pinned_search_path(
+    database: MigratedDatabase,
+):
+    with _admin(database) as conn:
+        definers = {
+            (fn, owner, tuple(config or ()))
+            for fn, owner, _, secdef, config in _function_acl(conn)
+            if secdef
+        }
+    assert definers, "expected SECURITY DEFINER functions"
+    for fn, owner, config in definers:
+        assert owner in {r.value for r in DefinerRole}, fn
+        # A definer function that resolves names through the caller's search_path can be
+        # tricked into calling an attacker's object.
+        assert "search_path=pg_catalog, pg_temp" in config, fn
 
 
 @pytest.mark.parametrize("role", SERVICE_ROLES)
@@ -153,6 +296,8 @@ def test_service_role_grants_match_the_expected_list(database: MigratedDatabase)
     [
         "CREATE TABLE sneaky (id int)",
         "SET ROLE migrator",
+        "SET ROLE ledger_definer",
+        "SET ROLE sweeper",
         "ALTER TABLE principal NO FORCE ROW LEVEL SECURITY",
         "ALTER TABLE principal DISABLE ROW LEVEL SECURITY",
         "DROP POLICY tenant_isolation ON principal",
@@ -164,11 +309,54 @@ def test_service_role_grants_match_the_expected_list(database: MigratedDatabase)
         "CREATE FUNCTION current_tenant_id() RETURNS uuid LANGUAGE sql AS 'SELECT NULL::uuid'",
         "CREATE OR REPLACE FUNCTION current_tenant_id() RETURNS uuid "
         "LANGUAGE sql AS 'SELECT NULL::uuid'",
+        "CREATE FUNCTION ledger.sneaky() RETURNS int LANGUAGE sql AS 'SELECT 1'",
+        "INSERT INTO budget (tenant_id, scope, period, limit_micro_usd) "
+        "VALUES (gen_random_uuid(), 'organization', 'month', 1)",
+        "UPDATE budget SET limit_micro_usd = limit_micro_usd * 10",
+        "UPDATE ledger_account SET reserved_micro_usd = 0",
+        "UPDATE ledger_account SET limit_micro_usd = limit_micro_usd * 10",
+        "UPDATE reservation SET state = 'released'",
+        "DELETE FROM reservation",
+        "INSERT INTO ledger_entry (tenant_id, ledger_account_id, reservation_id, kind, "
+        "reserved_delta, spent_delta) VALUES (gen_random_uuid(), gen_random_uuid(), "
+        "gen_random_uuid(), 'settle', 0, 0)",
+        "UPDATE price_item SET micro_usd = 0",
+        "INSERT INTO price_version (label, effective_at, source) VALUES ('x', now(), 'x')",
+        "SELECT ledger.period_start('day', now())",
     ],
 )
 def test_service_roles_are_refused(database: MigratedDatabase, role: Role, statement: str):
     with (
         pytest.raises((ProgrammingError, InternalError), match=r"permission denied|must be owner"),
+        database.engine(role).begin() as conn,
+    ):
+        conn.execute(text(statement))
+
+
+_ID = "gen_random_uuid()"
+
+
+@pytest.mark.parametrize(
+    ("role", "statement"),
+    [
+        # Only callers that start work reserve; the gateway checks reservations, never makes them.
+        (Role.GW, f"SELECT * FROM ledger.reserve({_ID}, {_ID}, NULL, 1, {_ID}, 'x', '1 min')"),
+        # Only the gateway marks work started or records what it cost.
+        (Role.APP_WORKER, f"SELECT ledger.start({_ID}, {_ID}, NULL, 1, '1 hour')"),
+        (Role.APP_USER, f"SELECT ledger.start({_ID}, {_ID}, NULL, 1, '1 hour')"),
+        (Role.APP_WORKER, f"SELECT ledger.settle({_ID}, 0)"),
+        (Role.APP_USER, f"SELECT ledger.settle({_ID}, 0)"),
+        # Expiry and the cross-tenant scan belong to the worker's sweeper.
+        (Role.APP_USER, f"SELECT ledger.expire({_ID})"),
+        (Role.GW, f"SELECT ledger.expire({_ID})"),
+        (Role.APP_USER, "SELECT * FROM sweep.due_for_expiry(10)"),
+        (Role.GW, "SELECT * FROM sweep.due_for_expiry(10)"),
+        (Role.APP_WORKER, "SELECT * FROM ledger.lock_accounts(gen_random_uuid())"),
+    ],
+)
+def test_ledger_functions_are_split_by_role(database: MigratedDatabase, role: Role, statement: str):
+    with (
+        pytest.raises(ProgrammingError, match=r"permission denied"),
         database.engine(role).begin() as conn,
     ):
         conn.execute(text(statement))

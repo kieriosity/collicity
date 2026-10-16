@@ -126,3 +126,44 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## Build & Test
+
+```bash
+just sync     # uv workspace in python/ (Python 3.13)
+just dev      # local Postgres 17 on 127.0.0.1:55432, roles, migrations
+just check    # ruff, pyright (strict on src), pytest — what CI runs
+just test libs/db -k isolation   # extra args go to pytest
+```
+
+Use 127.0.0.1, not localhost, in local database URLs: on Windows an IPv6 attempt stalls each
+connection.
+
+## Architecture Overview
+
+The source of truth is `docs/Collicity — Technical Design (Draft v0.5).md` (and the spec it
+accompanies). Requirement IDs (SEC-09, RUN-07, …) refer to the spec; cite them in docstrings and
+test names. Three services (`app`, `worker`, `gateway`) and an `extract` Lambda; only the
+gateway holds credentials or reaches the internet. Postgres is the system of record.
+
+## Conventions & Patterns
+
+- Invariants hold by structure: enforce them with database roles, RLS, IAM or a single code
+  path, and prove them with tests that read the catalog or try the forbidden thing.
+- Tenant data is touched only inside `collicity_db.tenant_session()` / `tenant_connection()`.
+- Migrations are hand-written SQL in `python/libs/db/src/collicity_db/migrations/versions/`,
+  forward-only. Every tenant table: `ENABLE` + `FORCE` RLS with the `tenant_isolation` policy,
+  composite `(tenant_id, …)` foreign keys, and explicit grants mirrored in
+  `libs/db/tests/test_roles.py::EXPECTED_TABLE_GRANTS`. Keep `collicity_db.models` in step.
+- State that may change only in controlled ways (balances now; approvals and audit later)
+  changes through `SECURITY DEFINER` functions owned by a NOLOGIN role from
+  `collicity_db.roles.DefinerRole`, in that role's own schema, with
+  `SET search_path = pg_catalog, pg_temp`, and still bound by tenant RLS. Grant `EXECUTE` per
+  service role, never to PUBLIC; `test_roles.py` lists every grant.
+- Money is integer micro-USD. Prices come only from `catalog/prices/*.json`, published as
+  immutable versions; never hard-code a price.
+- Prove a concurrency claim with a test that forces the interleaving (see
+  `libs/ledger/tests/test_concurrency.py`), then check that it fails with the protection removed.
+- Files are UTF-8. Some editors on this machine write UTF-16; check with `file` if unsure.
+- Never edit the spec or technical design in place; new drafts go in `docs/`, old ones to
+  `docs/archive/`.

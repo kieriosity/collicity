@@ -86,5 +86,15 @@ gateway holds credentials or reaches the internet. Postgres is the system of rec
   forward-only. Every tenant table: `ENABLE` + `FORCE` RLS with the `tenant_isolation` policy,
   composite `(tenant_id, …)` foreign keys, and explicit grants mirrored in
   `libs/db/tests/test_roles.py::EXPECTED_TABLE_GRANTS`. Keep `collicity_db.models` in step.
+- State that may change only in controlled ways (balances now; approvals and audit later)
+  changes through `SECURITY DEFINER` functions owned by a NOLOGIN role from
+  `collicity_db.roles.DefinerRole`, in that role's own schema, with
+  `SET search_path = pg_catalog, pg_temp`, and still bound by tenant RLS. Grant `EXECUTE` per
+  service role, never to PUBLIC; `test_roles.py` lists every grant.
+- Money is integer micro-USD. Prices come only from `catalog/prices/*.json`, published as
+  immutable versions; never hard-code a price.
+- Prove a concurrency claim with a test that forces the interleaving (see
+  `libs/ledger/tests/test_concurrency.py`), then check that it fails with the protection removed.
+- Files are UTF-8. Some editors on this machine write UTF-16; check with `file` if unsure.
 - Never edit the spec or technical design in place; new drafts go in `docs/`, old ones to
   `docs/archive/`.

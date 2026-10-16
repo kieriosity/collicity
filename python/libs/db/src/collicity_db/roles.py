@@ -30,6 +30,18 @@ class Role(StrEnum):
 SERVICE_ROLES: tuple[Role, ...] = (Role.APP_USER, Role.APP_WORKER, Role.GW)
 
 
+class DefinerRole(StrEnum):
+    """Roles that own SECURITY DEFINER functions. Nobody logs in as them.
+
+    A definer function runs with its owner's privileges, so each owner holds only what its
+    functions need. ``ledger_definer`` is still bound by tenant RLS; ``sweeper`` alone may list
+    identifiers across tenants, so the worker can find due deadlines.
+    """
+
+    LEDGER = "ledger_definer"
+    SWEEPER = "sweeper"
+
+
 def libpq_url(url: str) -> str:
     """Turn a SQLAlchemy URL (``postgresql+psycopg://…``) into a libpq connection string."""
     return make_url(url).set(drivername="postgresql").render_as_string(hide_password=False)
@@ -40,7 +52,7 @@ def bootstrap_cluster(
     database: str,
     passwords: Mapping[Role, str] | None = None,
 ) -> None:
-    """Create the roles and the database, idempotently.
+    """Create the login roles, the definer roles and the database, idempotently.
 
     ``admin_url`` is a SQLAlchemy URL for a role that can create roles and databases (the local
     superuser, or Aurora's master user). Roles in ``passwords`` get that password; the others
@@ -65,6 +77,24 @@ def bootstrap_cluster(
                         sql.Identifier(role.value), sql.Literal(passwords[role])
                     )
                 )
+
+        for definer in DefinerRole:
+            exists = conn.execute(
+                "SELECT 1 FROM pg_roles WHERE rolname = %s", (definer.value,)
+            ).fetchone()
+            if exists is None:
+                conn.execute(
+                    sql.SQL(
+                        "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                        "NOREPLICATION NOBYPASSRLS"
+                    ).format(sql.Identifier(definer.value))
+                )
+            # migrator creates the definer's schema and functions as that role.
+            conn.execute(
+                sql.SQL("GRANT {} TO {}").format(
+                    sql.Identifier(definer.value), sql.Identifier(Role.MIGRATOR.value)
+                )
+            )
 
         db_exists = conn.execute(
             "SELECT 1 FROM pg_database WHERE datname = %s", (database,)

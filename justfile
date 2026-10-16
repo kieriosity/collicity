@@ -20,8 +20,8 @@ default:
 sync:
     uv sync --directory python
 
-# Start local services, create roles and migrate
-dev: db-up db-migrate
+# Start local services, create roles, migrate and publish prices
+dev: db-up db-migrate prices
 
 # Start Postgres and wait until it's healthy
 db-up:
@@ -31,6 +31,14 @@ db-up:
 db-migrate:
     {{py}} python -m collicity_db bootstrap
     {{py}} python -m collicity_db upgrade
+
+# Publish every price catalog file (already-published labels are skipped)
+prices:
+    for f in catalog/prices/*.json; do {{py}} python -m collicity_ledger publish-prices "../$f"; done
+
+# Check the price catalog files without publishing
+prices-check:
+    for f in catalog/prices/*.json; do {{py}} python -m collicity_ledger publish-prices --check "../$f"; done
 
 # Stop local services; `just db-down -v` also deletes the data
 db-down *args:
@@ -56,4 +64,4 @@ fmt:
     {{py}} ruff format .
 
 # Everything CI runs
-check: lint test
+check: lint prices-check test

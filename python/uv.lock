@@ -7,6 +7,7 @@ members = [
     "collicity-app",
     "collicity-core",
     "collicity-db",
+    "collicity-ledger",
     "collicity-testing",
     "collicity-workspace",
 ]
@@ -174,12 +175,30 @@ requires-dist = [
 ]
 
 [[package]]
+name = "collicity-ledger"
+version = "0.1.0"
+source = { editable = "libs/ledger" }
+dependencies = [
+    { name = "collicity-core" },
+    { name = "collicity-db" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "collicity-core", editable = "libs/core" },
+    { name = "collicity-db", editable = "libs/db" },
+    { name = "sqlalchemy", specifier = ">=2.0.36" },
+]
+
+[[package]]
 name = "collicity-testing"
 version = "0.1.0"
 source = { editable = "testing" }
 dependencies = [
     { name = "collicity-core" },
     { name = "collicity-db" },
+    { name = "collicity-ledger" },
     { name = "pytest" },
     { name = "testcontainers" },
 ]
@@ -188,6 +207,7 @@ dependencies = [
 requires-dist = [
     { name = "collicity-core", editable = "libs/core" },
     { name = "collicity-db", editable = "libs/db" },
+    { name = "collicity-ledger", editable = "libs/ledger" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.9" },
 ]
@@ -202,6 +222,7 @@ dev = [
     { name = "collicity-app" },
     { name = "collicity-core" },
     { name = "collicity-db" },
+    { name = "collicity-ledger" },
     { name = "collicity-testing" },
     { name = "httpx2" },
     { name = "hypothesis" },
@@ -218,6 +239,7 @@ dev = [
     { name = "collicity-app", editable = "services/app" },
     { name = "collicity-core", editable = "libs/core" },
     { name = "collicity-db", editable = "libs/db" },
+    { name = "collicity-ledger", editable = "libs/ledger" },
     { name = "collicity-testing", editable = "testing" },
     { name = "httpx2", specifier = ">=2.13" },
     { name = "hypothesis", specifier = ">=6.120" },

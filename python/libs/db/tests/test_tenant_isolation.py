@@ -22,7 +22,7 @@ def test_without_a_context_every_tenant_table_reads_as_empty(
 ):
     seed_tenant(database)
     with database.engine(role).connect() as conn:
-        assert conn.execute(text(f"SELECT count(*) FROM {table}")).scalar_one() == 0  # noqa: S608
+        assert conn.execute(text(f"SELECT count(*) FROM {table}")).scalar_one() == 0
 
 
 @settings(
@@ -114,7 +114,7 @@ def test_a_context_for_an_unknown_tenant_sees_nothing(database: MigratedDatabase
     seed_tenant(database)
     with tenant_connection(database.engine(Role.GW), TenantContext(new_id())) as conn:
         for table in TENANT_TABLES:
-            count = conn.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()  # noqa: S608
+            count = conn.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()
             assert count == 0
 
 

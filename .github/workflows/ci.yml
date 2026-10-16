@@ -39,6 +39,9 @@ jobs:
       - name: Types
         run: uv run pyright
 
+      - name: Price catalog
+        run: for f in ../catalog/prices/*.json; do uv run python -m collicity_ledger publish-prices --check "$f"; done
+
       # Database tests start Postgres 17 with testcontainers on the runner's Docker.
       - name: Tests
         run: uv run pytest
