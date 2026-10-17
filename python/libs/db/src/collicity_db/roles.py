@@ -34,11 +34,12 @@ class DefinerRole(StrEnum):
     """Roles that own SECURITY DEFINER functions. Nobody logs in as them.
 
     A definer function runs with its owner's privileges, so each owner holds only what its
-    functions need. ``ledger_definer`` is still bound by tenant RLS; ``sweeper`` alone may list
-    identifiers across tenants, so the worker can find due deadlines.
+    functions need. ``ledger_definer`` and ``audit_definer`` are still bound by tenant RLS;
+    ``sweeper`` alone may list identifiers across tenants, so the worker can find due work.
     """
 
     LEDGER = "ledger_definer"
+    AUDIT = "audit_definer"
     SWEEPER = "sweeper"
 
 

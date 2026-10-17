@@ -160,6 +160,8 @@ gateway holds credentials or reaches the internet. Postgres is the system of rec
   `collicity_db.roles.DefinerRole`, in that role's own schema, with
   `SET search_path = pg_catalog, pg_temp`, and still bound by tenant RLS. Grant `EXECUTE` per
   service role, never to PUBLIC; `test_roles.py` lists every grant.
+- Audit through `collicity_audit.append` in the same transaction as the work. `detail` holds
+  identifiers and hashes only; anything about a person goes in `personal`, which is encrypted.
 - Money is integer micro-USD. Prices come only from `catalog/prices/*.json`, published as
   immutable versions; never hard-code a price.
 - Prove a concurrency claim with a test that forces the interleaving (see

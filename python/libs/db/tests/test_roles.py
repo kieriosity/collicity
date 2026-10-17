@@ -13,7 +13,7 @@ from collicity_db import Role
 from collicity_db.roles import SERVICE_ROLES, DefinerRole
 from collicity_testing.postgres import MigratedDatabase
 
-OUR_SCHEMAS = ("public", "ledger", "sweep")
+OUR_SCHEMAS = ("public", "ledger", "sweep", "audit")
 
 # Tables that hold no tenant data and so carry no tenant RLS. Keep this list short.
 GLOBAL_TABLES = {"alembic_version", "price_version", "price_item"}
@@ -23,9 +23,15 @@ TENANT_PREDICATE = "(tenant_id = current_tenant_id())"
 TENANT_PREDICATE_OVERRIDES = {"tenant": "(id = current_tenant_id())"}
 # Roles a tenant_isolation policy may name: every service role, plus definer roles that RLS
 # must still bind inside their functions.
-TENANT_POLICY_ROLES = {r.value for r in SERVICE_ROLES} | {DefinerRole.LEDGER.value}
+TENANT_POLICY_ROLES = {r.value for r in SERVICE_ROLES} | {
+    DefinerRole.LEDGER.value,
+    DefinerRole.AUDIT.value,
+}
 # Policies other than tenant_isolation and migrator_all: (table, name) -> (roles, command).
-EXTRA_POLICIES = {("reservation", "sweeper_scan"): (["sweeper"], "SELECT")}
+EXTRA_POLICIES = {
+    ("reservation", "sweeper_scan"): (["sweeper"], "SELECT"),
+    ("pending", "sweeper_scan"): (["sweeper"], "SELECT"),
+}
 
 _READ_TENANCY = {("tenant", "SELECT"), ("principal", "SELECT"), ("role_grant", "SELECT")}
 _READ_PRICES = {("price_version", "SELECT"), ("price_item", "SELECT")}
@@ -33,8 +39,9 @@ _READ_LEDGER = {
     (table, "SELECT")
     for table in ("budget", "ledger_account", "reservation", "reservation_account", "ledger_entry")
 }
+_READ_AUDIT = {("record", "SELECT"), ("seal", "SELECT")}
 EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
-    "app_user": _READ_TENANCY | _READ_PRICES | _READ_LEDGER,
+    "app_user": _READ_TENANCY | _READ_PRICES | _READ_LEDGER | _READ_AUDIT,
     "app_worker": _READ_TENANCY | _READ_PRICES | _READ_LEDGER,
     "gw": _READ_TENANCY | _READ_PRICES | {("reservation", "SELECT")},
     "ledger_definer": {
@@ -49,37 +56,66 @@ EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
         ("reservation_account", "INSERT"),
         ("ledger_entry", "INSERT"),
     },
+    "audit_definer": {
+        (table, privilege)
+        for table, privileges in {
+            "record": ("SELECT", "INSERT"),
+            "seal": ("SELECT", "INSERT"),
+            "tenant_key": ("SELECT", "INSERT"),
+            "erased": ("SELECT", "INSERT"),
+            "pending": ("SELECT", "INSERT", "DELETE"),
+            "chain": ("SELECT", "INSERT", "UPDATE"),
+            "person_key": ("SELECT", "INSERT", "DELETE"),
+            "blind_index": ("SELECT", "INSERT", "DELETE"),
+        }.items()
+        for privilege in privileges
+    },
     "sweeper": set(),
 }
 EXPECTED_COLUMN_GRANTS: dict[str, set[tuple[str, str, str]]] = {
     "sweeper": {
         ("reservation", column, "SELECT") for column in ("id", "tenant_id", "state", "expires_at")
-    },
+    }
+    | {("pending", "tenant_id", "SELECT")},
 }
 # Functions each role may execute, other than those it owns.
+_CONTEXT = {"current_tenant_id()", "current_principal_id()"}
+_AUDIT_WRITE = {
+    "audit.append(jsonb,bytea,text[],bytea[])",
+    "audit.person_key(uuid)",
+    "audit.add_person_key(uuid,bytea)",
+    "audit.blind_key()",
+    "audit.add_blind_key(bytea)",
+}
 EXPECTED_EXECUTE: dict[str, set[str]] = {
-    "app_user": {
-        "current_tenant_id()",
-        "current_principal_id()",
+    "app_user": _CONTEXT
+    | _AUDIT_WRITE
+    | {
         "ledger.reserve(uuid,uuid,uuid,bigint,uuid,text,interval)",
         "ledger.release(uuid)",
+        "audit.find(text,bytea)",
     },
-    "app_worker": {
-        "current_tenant_id()",
-        "current_principal_id()",
+    "app_worker": _CONTEXT
+    | _AUDIT_WRITE
+    | {
         "ledger.reserve(uuid,uuid,uuid,bigint,uuid,text,interval)",
         "ledger.release(uuid)",
         "ledger.expire(uuid)",
         "sweep.due_for_expiry(integer)",
+        "audit.seal(integer)",
+        "audit.verify()",
+        "audit.shred_person(uuid)",
+        "sweep.tenants_with_unsealed_audit(integer)",
     },
-    "gw": {
-        "current_tenant_id()",
-        "current_principal_id()",
+    "gw": _CONTEXT
+    | _AUDIT_WRITE
+    | {
         "ledger.release(uuid)",
         "ledger.start(uuid,uuid,uuid,bigint,interval)",
         "ledger.settle(uuid,bigint)",
     },
     "ledger_definer": {"current_tenant_id()"},
+    "audit_definer": {"current_tenant_id()"},
     "sweeper": set(),
 }
 CHECKED_ROLES = tuple(EXPECTED_TABLE_GRANTS)
@@ -323,6 +359,20 @@ def test_security_definer_functions_have_a_definer_owner_and_a_pinned_search_pat
         "UPDATE price_item SET micro_usd = 0",
         "INSERT INTO price_version (label, effective_at, source) VALUES ('x', now(), 'x')",
         "SELECT ledger.period_start('day', now())",
+        # The audit log: no direct writes, no changes, no reading keys except through functions.
+        "INSERT INTO audit.record (id, tenant_id, occurred_at, kind, digest) "
+        "VALUES (gen_random_uuid(), gen_random_uuid(), now(), 'admin_change', decode('00', 'hex'))",
+        "UPDATE audit.record SET outcome = 'ok'",
+        "DELETE FROM audit.record",
+        "UPDATE audit.seal SET hash = decode('00', 'hex')",
+        "DELETE FROM audit.seal",
+        "UPDATE audit.chain SET last_seq = 0",
+        "DELETE FROM audit.pending",
+        "SELECT * FROM audit.person_key",
+        "DELETE FROM audit.person_key",
+        "DELETE FROM audit.blind_index",
+        "SELECT * FROM audit.tenant_key",
+        "CREATE FUNCTION audit.sneaky() RETURNS int LANGUAGE sql AS 'SELECT 1'",
     ],
 )
 def test_service_roles_are_refused(database: MigratedDatabase, role: Role, statement: str):
@@ -352,6 +402,15 @@ _ID = "gen_random_uuid()"
         (Role.APP_USER, "SELECT * FROM sweep.due_for_expiry(10)"),
         (Role.GW, "SELECT * FROM sweep.due_for_expiry(10)"),
         (Role.APP_WORKER, "SELECT * FROM ledger.lock_accounts(gen_random_uuid())"),
+        # Sealing, verification and erasure belong to the worker; search to the console.
+        (Role.GW, "SELECT audit.seal(10)"),
+        (Role.APP_USER, "SELECT audit.seal(10)"),
+        (Role.GW, "SELECT * FROM audit.verify()"),
+        (Role.APP_USER, f"SELECT * FROM audit.shred_person({_ID})"),
+        (Role.GW, f"SELECT * FROM audit.shred_person({_ID})"),
+        (Role.GW, "SELECT * FROM audit.find('email', decode('00', 'hex'))"),
+        (Role.APP_USER, "SELECT * FROM sweep.tenants_with_unsealed_audit(10)"),
+        (Role.APP_WORKER, "SELECT audit.canonical(NULL::audit.record)"),
     ],
 )
 def test_ledger_functions_are_split_by_role(database: MigratedDatabase, role: Role, statement: str):

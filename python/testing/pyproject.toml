@@ -5,6 +5,7 @@ description = "Test support: Postgres fixtures now; fakes, model stubs and honey
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "collicity-core",
+    "collicity-audit",
     "collicity-db",
     "collicity-grants",
     "collicity-ledger",
@@ -17,6 +18,7 @@ collicity = "collicity_testing.plugin"
 
 [tool.uv.sources]
 collicity-core = { workspace = true }
+collicity-audit = { workspace = true }
 collicity-db = { workspace = true }
 collicity-grants = { workspace = true }
 collicity-ledger = { workspace = true }

@@ -1,0 +1,19 @@
+[project]
+name = "collicity-audit"
+version = "0.1.0"
+description = "The write-ahead, hash-chained audit log with crypto-shredding (ADM-07, SEC-07, MR-16)"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "collicity-core",
+    "collicity-db",
+    "cryptography>=44",
+    "sqlalchemy>=2.0.36",
+]
+
+[tool.uv.sources]
+collicity-core = { workspace = true }
+collicity-db = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
