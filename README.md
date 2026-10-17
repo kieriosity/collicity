@@ -10,6 +10,7 @@ The repository follows the technical design (§13). Only the parts built so far 
 ```text
 python/                uv workspace (Python 3.13)
   libs/core            identifiers, tenant context, log redaction (SEC-03)
+  libs/assignments     assignments, immutable versions, acceptance, step grants, kill switch
   libs/audit           write-ahead, hash-chained audit log with crypto-shredding (ADM-07, SEC-07)
   libs/db              database roles, tenant-scoped sessions (SEC-09), models, migrations
   libs/grants          the permission ceiling: manifests, capability grants, evaluator (CON-02)
@@ -80,6 +81,16 @@ and hashes; personal fields are encrypted in the application under a per-person 
 destroying that key (crypto-shredding, SEC-07) erases them while the chain still verifies.
 Searchable personal fields get keyed-hash blind indexes outside the chain. Signed anchors in S3
 Object Lock, which catch a forger who rewrites the whole chain, come with the AWS work.
+
+## Versions and step grants in one paragraph
+
+An assignment's versions are immutable, and only `standing.accept_version`, run by the
+assignment's owner, makes one current; the worker can't change standing instructions at all
+(SEC-12). Each run step gets a step grant: a row naming the capabilities it may use, which the
+worker issues only from an accepted version. The database stamps it with the tenant's, the
+owner's and the assignment's current epochs. The gateway checks it before every call, and a
+pause (ASG-13) bumps the paused scope's epoch, so every earlier grant fails at once and a resume
+never revives it. Pauses are audited and announced on `collicity_epochs` for gateway caches.
 
 ## Issue tracking
 

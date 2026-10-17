@@ -6,9 +6,12 @@ admin settings), so they are validated Pydantic models. All are immutable.
 
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
+
+# Sets serialize sorted, so equal grants always produce the same JSON and the same hash.
+SortedSet = Annotated[frozenset[str], PlainSerializer(sorted, return_type=list[str])]
 
 
 class _Model(BaseModel):
@@ -125,9 +128,9 @@ class CapabilityGrant(_Model):
     action: str
     # Resource param -> the stable IDs it may name (resolved at acceptance, so a rename can't
     # widen it).
-    resources: dict[str, frozenset[str]] = Field(default_factory=dict)
-    read_fields: frozenset[str] = frozenset()
-    write_fields: frozenset[str] = frozenset()
+    resources: dict[str, SortedSet] = Field(default_factory=dict)
+    read_fields: SortedSet = frozenset()
+    write_fields: SortedSet = frozenset()
     # None allows no recipients at all.
     recipient_rule: Literal["original_sender_only"] | None = None
     limits: dict[str, FieldLimit] = Field(default_factory=dict)
@@ -181,6 +184,7 @@ class DenyCode(StrEnum):
     MANIFEST_MISMATCH = "manifest_mismatch"
     UNKNOWN_ACTION = "unknown_action"
     SECURITY_CLASS = "security_class"
+    READ_ONLY = "read_only"
     DISABLED_BY_POLICY = "disabled_by_policy"
     NOT_GRANTED = "not_granted"
     SCOPE_NOT_CONSENTED = "scope_not_consented"

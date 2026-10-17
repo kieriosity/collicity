@@ -8,6 +8,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "collicity-core",
+    "collicity-assignments",
     "collicity-audit",
     "collicity-db",
     "collicity-grants",
@@ -30,6 +31,7 @@ members = ["libs/*", "services/*", "testing"]
 
 [tool.uv.sources]
 collicity-core = { workspace = true }
+collicity-assignments = { workspace = true }
 collicity-audit = { workspace = true }
 collicity-db = { workspace = true }
 collicity-grants = { workspace = true }

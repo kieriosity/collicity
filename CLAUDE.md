@@ -99,6 +99,9 @@ gateway holds credentials or reaches the internet. Postgres is the system of rec
   `libs/ledger/tests/test_concurrency.py`), then check that it fails with the protection removed.
 - Check that a property test isn't vacuous: break the code it guards and confirm it fails
   (back up the files first, untracked ones included). See `libs/grants/tests/test_properties.py`.
+- Before a connector call the gateway runs `collicity_assignments.check_step_grant`, then
+  `evaluate(..., read_only=grant.dry_run)` with the grant's capabilities. Nothing else authorizes
+  a call.
 - Connector calls are decided only by `collicity_grants.evaluate`; widening a grant element means
   updating `widens` and its tests together. Regenerate `schemas/` with `just schemas`.
 - Files are UTF-8. Some editors on this machine write UTF-16; check with `file` if unsure.

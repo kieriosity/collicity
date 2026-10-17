@@ -55,10 +55,15 @@ def evaluate(
     policy: AdminPolicy,
     consented_scopes: frozenset[str],
     request: CallRequest,
+    *,
+    read_only: bool = False,
 ) -> Decision:
-    """Allow ``request`` only if every element of the permission ceiling allows it."""
+    """Allow ``request`` only if every element of the permission ceiling allows it.
+
+    ``read_only`` is set for a dry run's step grants (ASG-05): only reads are allowed.
+    """
     try:
-        return _evaluate(manifest, grants, policy, consented_scopes, request)
+        return _evaluate(manifest, grants, policy, consented_scopes, request, read_only=read_only)
     except _Denied as denied:
         return Deny(code=denied.code, detail=denied.detail)
 
@@ -69,6 +74,8 @@ def _evaluate(
     policy: AdminPolicy,
     consented_scopes: frozenset[str],
     request: CallRequest,
+    *,
+    read_only: bool,
 ) -> Allow:
     connector = manifest.connector
     _require(
@@ -90,6 +97,11 @@ def _evaluate(
         action.kind is not ActionKind.SECURITY,
         DenyCode.SECURITY_CLASS,
         "security and access changes are refused in the beta (SEC-16)",
+    )
+    _require(
+        not read_only or action.kind is ActionKind.READ,
+        DenyCode.READ_ONLY,
+        "a dry run reads but changes nothing (ASG-05)",
     )
     _require(
         action.kind not in policy.disabled_kinds.get(connector, frozenset())

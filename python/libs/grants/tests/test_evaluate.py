@@ -388,3 +388,17 @@ def test_folder_reads_drop_messages_from_other_folders():
         ],
     )
     assert [r.fields["subject"] for r in filtered.records] == ["Order 20 bolts"]
+
+
+# ---- Dry runs (ASG-05) ------------------------------------------------------------------------
+
+
+def test_a_dry_run_reads_but_changes_nothing():
+    read = evaluate(
+        MANIFEST, GRANTS, POLICY, SCOPES, sample.request("excel.read_rows"), read_only=True
+    )
+    assert isinstance(read, Allow)
+    write = evaluate(MANIFEST, GRANTS, POLICY, SCOPES, update({"Qty": 11}), read_only=True)
+    assert denied(write) is DenyCode.READ_ONLY
+    draft = evaluate(MANIFEST, GRANTS, POLICY, SCOPES, reply([SENDER]), read_only=True)
+    assert denied(draft) is DenyCode.READ_ONLY

@@ -13,7 +13,7 @@ from collicity_db import Role
 from collicity_db.roles import SERVICE_ROLES, DefinerRole
 from collicity_testing.postgres import MigratedDatabase
 
-OUR_SCHEMAS = ("public", "ledger", "sweep", "audit")
+OUR_SCHEMAS = ("public", "ledger", "sweep", "audit", "standing", "runtime")
 
 # Tables that hold no tenant data and so carry no tenant RLS. Keep this list short.
 GLOBAL_TABLES = {"alembic_version", "price_version", "price_item"}
@@ -24,13 +24,17 @@ TENANT_PREDICATE_OVERRIDES = {"tenant": "(id = current_tenant_id())"}
 # Roles a tenant_isolation policy may name: every service role, plus definer roles that RLS
 # must still bind inside their functions.
 TENANT_POLICY_ROLES = {r.value for r in SERVICE_ROLES} | {
-    DefinerRole.LEDGER.value,
-    DefinerRole.AUDIT.value,
+    role.value for role in DefinerRole if role is not DefinerRole.SWEEPER
 }
-# Policies other than tenant_isolation and migrator_all: (table, name) -> (roles, command).
+
+# Policies other than tenant_isolation and migrator_all: (table, name) -> (roles, command,
+# permissive). A further permissive policy for a service role would widen what it sees, so
+# any that name one must be RESTRICTIVE.
 EXTRA_POLICIES = {
-    ("reservation", "sweeper_scan"): (["sweeper"], "SELECT"),
-    ("pending", "sweeper_scan"): (["sweeper"], "SELECT"),
+    ("reservation", "sweeper_scan"): (["sweeper"], "SELECT", "PERMISSIVE"),
+    ("pending", "sweeper_scan"): (["sweeper"], "SELECT", "PERMISSIVE"),
+    ("assignment", "owner_creates"): (["app_user"], "INSERT", "RESTRICTIVE"),
+    ("assignment_version", "owner_drafts"): (["app_user"], "INSERT", "RESTRICTIVE"),
 }
 
 _READ_TENANCY = {("tenant", "SELECT"), ("principal", "SELECT"), ("role_grant", "SELECT")}
@@ -40,9 +44,14 @@ _READ_LEDGER = {
     for table in ("budget", "ledger_account", "reservation", "reservation_account", "ledger_entry")
 }
 _READ_AUDIT = {("record", "SELECT"), ("seal", "SELECT")}
+_READ_STANDING = {
+    ("assignment", "SELECT"),
+    ("assignment_version", "SELECT"),
+    ("version_acceptance", "SELECT"),
+}
 EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
-    "app_user": _READ_TENANCY | _READ_PRICES | _READ_LEDGER | _READ_AUDIT,
-    "app_worker": _READ_TENANCY | _READ_PRICES | _READ_LEDGER,
+    "app_user": _READ_TENANCY | _READ_PRICES | _READ_LEDGER | _READ_AUDIT | _READ_STANDING,
+    "app_worker": _READ_TENANCY | _READ_PRICES | _READ_LEDGER | _READ_STANDING,
     "gw": _READ_TENANCY | _READ_PRICES | {("reservation", "SELECT")},
     "ledger_definer": {
         ("budget", "SELECT"),
@@ -70,6 +79,16 @@ EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
         }.items()
         for privilege in privileges
     },
+    "standing_definer": {("principal", "SELECT"), ("version_acceptance", "INSERT")}
+    | _READ_STANDING,
+    "runtime_definer": {
+        ("tenant", "SELECT"),
+        ("principal", "SELECT"),
+        ("role_grant", "SELECT"),
+        ("step_grant", "SELECT"),
+        ("step_grant", "INSERT"),
+    }
+    | _READ_STANDING,
     "sweeper": set(),
 }
 EXPECTED_COLUMN_GRANTS: dict[str, set[tuple[str, str, str]]] = {
@@ -77,6 +96,30 @@ EXPECTED_COLUMN_GRANTS: dict[str, set[tuple[str, str, str]]] = {
         ("reservation", column, "SELECT") for column in ("id", "tenant_id", "state", "expires_at")
     }
     | {("pending", "tenant_id", "SELECT")},
+    # The app inserts drafts, never epochs, pauses or the current version.
+    "app_user": {
+        ("assignment", column, "INSERT") for column in ("id", "tenant_id", "owner_id", "name")
+    }
+    | {
+        ("assignment_version", column, "INSERT")
+        for column in (
+            "id",
+            "tenant_id",
+            "assignment_id",
+            "number",
+            "grants",
+            "task_graph",
+            "taint",
+            "created_by",
+        )
+    },
+    "standing_definer": {("assignment", "current_version_id", "UPDATE")},
+    "runtime_definer": {("step_grant", "ended_at", "UPDATE")}
+    | {
+        (table, column, "UPDATE")
+        for table in ("tenant", "principal", "assignment")
+        for column in ("epoch", "runs_paused_at", "runs_paused_by")
+    },
 }
 # Functions each role may execute, other than those it owns.
 _CONTEXT = {"current_tenant_id()", "current_principal_id()"}
@@ -94,6 +137,13 @@ EXPECTED_EXECUTE: dict[str, set[str]] = {
         "ledger.reserve(uuid,uuid,uuid,bigint,uuid,text,interval)",
         "ledger.release(uuid)",
         "audit.find(text,bytea)",
+        "standing.accept_version(uuid,jsonb)",
+        "runtime.pause_tenant()",
+        "runtime.resume_tenant()",
+        "runtime.pause_principal(uuid)",
+        "runtime.resume_principal(uuid)",
+        "runtime.pause_assignment(uuid)",
+        "runtime.resume_assignment(uuid)",
     },
     "app_worker": _CONTEXT
     | _AUDIT_WRITE
@@ -106,6 +156,8 @@ EXPECTED_EXECUTE: dict[str, set[str]] = {
         "audit.verify()",
         "audit.shred_person(uuid)",
         "sweep.tenants_with_unsealed_audit(integer)",
+        "runtime.issue_step_grant(uuid,uuid,uuid,uuid,text,integer,text[],boolean,interval)",
+        "runtime.end_step_grant(uuid)",
     },
     "gw": _CONTEXT
     | _AUDIT_WRITE
@@ -113,9 +165,12 @@ EXPECTED_EXECUTE: dict[str, set[str]] = {
         "ledger.release(uuid)",
         "ledger.start(uuid,uuid,uuid,bigint,interval)",
         "ledger.settle(uuid,bigint)",
+        "runtime.check_step_grant(uuid)",
     },
     "ledger_definer": {"current_tenant_id()"},
     "audit_definer": {"current_tenant_id()"},
+    "standing_definer": _CONTEXT | {"audit.append(jsonb,bytea,text[],bytea[])"},
+    "runtime_definer": _CONTEXT | {"audit.append(jsonb,bytea,text[],bytea[])"},
     "sweeper": set(),
 }
 CHECKED_ROLES = tuple(EXPECTED_TABLE_GRANTS)
@@ -211,7 +266,10 @@ def test_every_table_is_global_or_under_forced_tenant_rls(database: MigratedData
         policies = {
             (row.tablename, row.policyname): row
             for row in conn.execute(
-                text("SELECT tablename, policyname, roles, cmd, qual, with_check FROM pg_policies")
+                text(
+                    "SELECT tablename, policyname, roles, cmd, permissive, qual, with_check "
+                    "FROM pg_policies"
+                )
             )
         }
 
@@ -239,7 +297,7 @@ def test_every_table_is_global_or_under_forced_tenant_rls(database: MigratedData
                 continue
             expected = EXTRA_POLICIES.get((table, policy_name))
             assert expected is not None, f"unexpected policy {policy_name} on {name}"
-            assert (other.roles, other.cmd) == expected, policy_name
+            assert (other.roles, other.cmd, other.permissive) == expected, policy_name
 
 
 def test_table_and_column_grants_match_the_expected_lists(database: MigratedDatabase):
@@ -373,6 +431,22 @@ def test_security_definer_functions_have_a_definer_owner_and_a_pinned_search_pat
         "DELETE FROM audit.blind_index",
         "SELECT * FROM audit.tenant_key",
         "CREATE FUNCTION audit.sneaky() RETURNS int LANGUAGE sql AS 'SELECT 1'",
+        # Standing instructions change only through acceptance; epochs only through pauses.
+        "UPDATE assignment SET current_version_id = id",
+        "UPDATE assignment SET epoch = 0",
+        "UPDATE assignment SET runs_paused_at = NULL",
+        "UPDATE assignment_version SET grants = '[]'",
+        "DELETE FROM assignment_version",
+        "INSERT INTO version_acceptance (version_id, tenant_id, assignment_id, accepted_by, "
+        "content_hash, widening) VALUES (gen_random_uuid(), gen_random_uuid(), "
+        "gen_random_uuid(), gen_random_uuid(), decode('00', 'hex'), '[]')",
+        "INSERT INTO step_grant (id, tenant_id, assignment_id, version_id, owner_id, step_key, "
+        "attempt, grants, dry_run, tenant_epoch, owner_epoch, assignment_epoch, expires_at) "
+        "VALUES (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), "
+        "gen_random_uuid(), 's', 1, '[]', false, 0, 0, 0, now())",
+        "UPDATE step_grant SET ended_at = NULL",
+        "UPDATE principal SET runs_paused_at = NULL",
+        "CREATE FUNCTION runtime.sneaky() RETURNS int LANGUAGE sql AS 'SELECT 1'",
     ],
 )
 def test_service_roles_are_refused(database: MigratedDatabase, role: Role, statement: str):
@@ -411,6 +485,32 @@ _ID = "gen_random_uuid()"
         (Role.GW, "SELECT * FROM audit.find('email', decode('00', 'hex'))"),
         (Role.APP_USER, "SELECT * FROM sweep.tenants_with_unsealed_audit(10)"),
         (Role.APP_WORKER, "SELECT audit.canonical(NULL::audit.record)"),
+        # Standing instructions are read-only to the worker (SEC-12).
+        (
+            Role.APP_WORKER,
+            "INSERT INTO assignment (id, tenant_id, owner_id, name) "
+            f"VALUES ({_ID}, {_ID}, {_ID}, 'x')",
+        ),
+        (Role.APP_WORKER, f"SELECT standing.accept_version({_ID}, '[]')"),
+        (Role.GW, f"SELECT standing.accept_version({_ID}, '[]')"),
+        # Only the worker issues step grants; only the gateway checks them.
+        (
+            Role.GW,
+            f"SELECT runtime.issue_step_grant({_ID}, {_ID}, {_ID}, NULL, 's', 1, NULL, "
+            "false, '1 minute')",
+        ),
+        (
+            Role.APP_USER,
+            f"SELECT runtime.issue_step_grant({_ID}, {_ID}, {_ID}, NULL, 's', 1, NULL, "
+            "false, '1 minute')",
+        ),
+        (Role.APP_WORKER, f"SELECT * FROM runtime.check_step_grant({_ID})"),
+        (Role.APP_USER, f"SELECT * FROM runtime.check_step_grant({_ID})"),
+        # The kill switch belongs to people, through the app.
+        (Role.APP_WORKER, "SELECT runtime.pause_tenant()"),
+        (Role.GW, "SELECT runtime.resume_tenant()"),
+        (Role.APP_WORKER, f"SELECT runtime.resume_principal({_ID})"),
+        (Role.APP_WORKER, "SELECT runtime.is_admin()"),
     ],
 )
 def test_ledger_functions_are_split_by_role(database: MigratedDatabase, role: Role, statement: str):
