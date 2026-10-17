@@ -1,0 +1,33 @@
+{
+  "label": "2026-10-15",
+  "effective_at": "2026-10-15T00:00:00+00:00",
+  "source": "Anthropic list prices per MTok (technical design v0.5 §2; Claude API reference cached 2026-10-06). Cache writes 1.25x input (5 min) and 2x (1 h). Cache reads are per model: 0.1x, except Opus 5.5 (0.05x) and Fable 5.1 (0.025x). Haiku 5.5's cache-read rate is assumed at 0.1x. Confirm every rate, and Claude Platform on AWS billing parity, on the pricing page before publishing to production.",
+  "models": [
+    {
+      "sku": "anthropic/claude-haiku-4-5",
+      "usd_per_mtok": {"input": "1", "output": "5", "cache_write_5m": "1.25", "cache_write_1h": "2", "cache_read": "0.10"}
+    },
+    {
+      "sku": "anthropic/claude-haiku-5-5",
+      "usd_per_mtok": {"input": "0.10", "output": "0.50", "cache_write_5m": "0.125", "cache_write_1h": "0.20", "cache_read": "0.01"},
+      "tiers": [
+        {
+          "min_prompt_tokens": 100001,
+          "usd_per_mtok": {"input": "0.50", "output": "2.50", "cache_write_5m": "0.625", "cache_write_1h": "1", "cache_read": "0.05"}
+        }
+      ]
+    },
+    {
+      "sku": "anthropic/claude-sonnet-5-5",
+      "usd_per_mtok": {"input": "2", "output": "10", "cache_write_5m": "2.50", "cache_write_1h": "4", "cache_read": "0.20"}
+    },
+    {
+      "sku": "anthropic/claude-opus-5-5",
+      "usd_per_mtok": {"input": "4", "output": "20", "cache_write_5m": "5", "cache_write_1h": "8", "cache_read": "0.20"}
+    },
+    {
+      "sku": "anthropic/claude-fable-5-1",
+      "usd_per_mtok": {"input": "10", "output": "50", "cache_write_5m": "12.50", "cache_write_1h": "20", "cache_read": "0.25"}
+    }
+  ]
+}

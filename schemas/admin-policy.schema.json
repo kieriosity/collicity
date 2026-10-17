@@ -1,0 +1,64 @@
+{
+  "$defs": {
+    "ActionKind": {
+      "enum": [
+        "read",
+        "write",
+        "destructive",
+        "security"
+      ],
+      "title": "ActionKind",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_scopes": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "title": "Allowed Scopes",
+      "type": "object"
+    },
+    "disabled_actions": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "title": "Disabled Actions",
+      "type": "object"
+    },
+    "disabled_kinds": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/ActionKind"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "title": "Disabled Kinds",
+      "type": "object"
+    },
+    "enabled_connectors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Enabled Connectors",
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "enabled_connectors"
+  ],
+  "title": "AdminPolicy",
+  "type": "object"
+}

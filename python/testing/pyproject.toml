@@ -1,0 +1,26 @@
+[project]
+name = "collicity-testing"
+version = "0.1.0"
+description = "Test support: Postgres fixtures now; fakes, model stubs and honeytokens later (§13)"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "collicity-core",
+    "collicity-db",
+    "collicity-grants",
+    "collicity-ledger",
+    "pytest>=8.3",
+    "testcontainers[postgres]>=4.9",
+]
+
+[project.entry-points.pytest11]
+collicity = "collicity_testing.plugin"
+
+[tool.uv.sources]
+collicity-core = { workspace = true }
+collicity-db = { workspace = true }
+collicity-grants = { workspace = true }
+collicity-ledger = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"

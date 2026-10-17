@@ -1,0 +1,74 @@
+[project]
+name = "collicity-workspace"
+version = "0.0.0"
+description = "Collicity Python workspace: services and shared libraries"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "collicity-core",
+    "collicity-db",
+    "collicity-grants",
+    "collicity-ledger",
+    "collicity-app",
+    "collicity-testing",
+    "hypothesis>=6.120",
+    "httpx2>=2.13",
+    "pyright>=1.1.390",
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "testcontainers[postgres]>=4.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["libs/*", "services/*", "testing"]
+
+[tool.uv.sources]
+collicity-core = { workspace = true }
+collicity-db = { workspace = true }
+collicity-grants = { workspace = true }
+collicity-ledger = { workspace = true }
+collicity-app = { workspace = true }
+collicity-testing = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "SIM", "RUF", "S", "N", "PT", "C4", "PL", "TID", "DTZ", "T20",
+]
+ignore = [
+    "PLR2004", # magic values read fine in tests and SQL-adjacent code
+    "PLR0913", # keyword-only constructors take many arguments
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106", "S311", "S608", "PLR0911", "PLR0912", "PLR0915"]
+"**/migrations/versions/*.py" = ["E501", "S608"]  # DDL built from constants
+
+[tool.ruff.lint.isort]
+known-first-party = ["collicity_*"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.pyright]
+include = ["libs", "services", "testing"]
+exclude = ["**/.venv", "**/__pycache__"]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+strict = ["libs/*/src", "services/*/src", "testing/src"]
+
+[tool.pytest.ini_options]
+testpaths = ["libs", "services"]
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers"]
+xfail_strict = true
+filterwarnings = ["error"]

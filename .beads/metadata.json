@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "collicity",
+  "project_id": "b1bd22af-3e57-4b69-ac47-4c35d7809359"
+}

@@ -1,6 +1,6 @@
 # Archive
 
-Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.5)](<../Collicity — Product Specification (Draft v0.5).md>), and the current technical design is [Collicity — Technical Design (Draft v0.2)](<../Collicity — Technical Design (Draft v0.2).md>); their revision histories list what changed between drafts.
+Superseded documents, kept for reference only. The current specification is [Collicity — Product Specification (Draft v0.19)](<../Collicity — Product Specification (Draft v0.19).md>), the beta baseline. The current technical design is [Collicity — Technical Design (Draft v0.5)](<../Collicity — Technical Design (Draft v0.5).md>), and [Collicity — AI RMF Alignment (Draft v0.1)](<../Collicity — AI RMF Alignment (Draft v0.1).md>) maps the specification to the NIST AI RMF. Their revision histories list what changed between drafts.
 
 ## Earlier Collicity drafts
 
@@ -10,7 +10,24 @@ Superseded documents, kept for reference only. The current specification is [Col
 | `Collicity — Product Specification (Draft v0.2)` (.md, .docx) | v0.2; its heading still reads v0.1 |
 | `Collicity — Product Specification (Draft v0.3)` (.md, .docx) | v0.3; its diagrams link to the shared images in `../images/` |
 | `Collicity — Product Specification (Draft v0.4)` (.md, .docx) | v0.4; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.5)` (.md, .docx) | v0.5; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.6)` (.md, .docx) | v0.6, Web Bot Auth as an alpha; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.7)` (.md, .docx) | v0.7, the master rules in their original wording; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.8)` (.md, .docx) | v0.8, mandates and the first rule amendments; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.9)` (.md, .docx) | v0.9, pending-review markers and master-rule checks; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.10)` (.md, .docx) | v0.10, the self-reviewed amendments with conditions; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.11)` (.md, .docx) | v0.11, conflicts from v0.10 resolved; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.12)` (.md, .docx) | v0.12, the re-confirmation date and amendment count; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.13)` (.md, .docx) | v0.13, the efficiency requirement, batch approval and mandate suggestions; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.14)` (.md, .docx) | v0.14, batch limits and external-sender exclusions; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.15)` (.md, .docx) | v0.15, the batch cap, mandate exclusions and unlock tiering; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.16)` (.md, .docx) | v0.16, all four PAY-08 actions treated the same; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.17)` (.md, .docx) | v0.17, all four PAY-08 actions named as a hard line; its diagrams link to the shared images in `../images/` |
+| `Collicity — Product Specification (Draft v0.18)` (.md, .docx) | v0.18, the team of three and the target date; its diagrams link to the shared images in `../images/` |
 | `Collicity — Technical Design (Draft v0.1)` (.md, .docx) | Technical design v0.1, before spec v0.5 adopted its proposed changes |
+| `Collicity — Technical Design (Draft v0.2)` (.md, .docx) | Technical design v0.2, which followed spec v0.5; its diagrams link to the shared images in `../images/` |
+| `Collicity — Technical Design (Draft v0.3)` (.md, .docx) | Technical design v0.3, which followed spec v0.17; its diagrams link to the shared images in `../images/` |
+| `Collicity — Technical Design (Draft v0.4)` (.md, .docx) | Technical design v0.4, which followed spec v0.18; its diagrams link to the shared images in `../images/` |
 
 ## Compliance Assistant design plans
 

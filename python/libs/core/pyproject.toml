@@ -1,0 +1,13 @@
+[project]
+name = "collicity-core"
+version = "0.1.0"
+description = "Shared primitives: identifiers, tenant context, settings, log redaction"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"

@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "FieldLimit": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "max_change": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Change"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        }
+      },
+      "title": "FieldLimit",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One capability of a task, as an accepted assignment version declares it.",
+  "properties": {
+    "action": {
+      "title": "Action",
+      "type": "string"
+    },
+    "connector": {
+      "title": "Connector",
+      "type": "string"
+    },
+    "limits": {
+      "additionalProperties": {
+        "$ref": "#/$defs/FieldLimit"
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "manifest_version": {
+      "title": "Manifest Version",
+      "type": "string"
+    },
+    "max_records_per_run": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Records Per Run"
+    },
+    "read_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Fields",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "recipient_rule": {
+      "anyOf": [
+        {
+          "const": "original_sender_only",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recipient Rule"
+    },
+    "resources": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array",
+        "uniqueItems": true
+      },
+      "title": "Resources",
+      "type": "object"
+    },
+    "write_fields": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Write Fields",
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "connector",
+    "manifest_version",
+    "action"
+  ],
+  "title": "CapabilityGrant",
+  "type": "object"
+}

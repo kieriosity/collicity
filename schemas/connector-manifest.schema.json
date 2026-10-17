@@ -1,0 +1,262 @@
+{
+  "$defs": {
+    "ActionKind": {
+      "enum": [
+        "read",
+        "write",
+        "destructive",
+        "security"
+      ],
+      "title": "ActionKind",
+      "type": "string"
+    },
+    "ActionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "compensation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compensation"
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CostModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duplicate_prevention": {
+          "anyOf": [
+            {
+              "enum": [
+                "a",
+                "b",
+                "c",
+                "d"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duplicate Prevention"
+        },
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Fields",
+          "type": "object"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActionKind"
+        },
+        "other_params": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Other Params",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "publishes": {
+          "default": false,
+          "title": "Publishes",
+          "type": "boolean"
+        },
+        "recipient_params": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Recipient Params",
+          "type": "array"
+        },
+        "recovery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Recovery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resource_determinable": {
+          "default": true,
+          "title": "Resource Determinable",
+          "type": "boolean"
+        },
+        "resource_params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Resource Params",
+          "type": "object"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "write_param": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Write Param"
+        }
+      },
+      "required": [
+        "kind",
+        "scopes"
+      ],
+      "title": "ActionSpec",
+      "type": "object"
+    },
+    "CostModel": {
+      "additionalProperties": false,
+      "description": "How the action is billed (BUD-03). ``free`` must be declared, never assumed.",
+      "properties": {
+        "free": {
+          "default": false,
+          "title": "Free",
+          "type": "boolean"
+        },
+        "meter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Meter"
+        },
+        "sku": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sku"
+        }
+      },
+      "title": "CostModel",
+      "type": "object"
+    },
+    "FieldSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Choices",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "type": {
+          "$ref": "#/$defs/FieldType"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "FieldSpec",
+      "type": "object"
+    },
+    "FieldType": {
+      "enum": [
+        "number",
+        "text",
+        "date",
+        "choice"
+      ],
+      "title": "FieldType",
+      "type": "string"
+    },
+    "Recovery": {
+      "enum": [
+        "compensable",
+        "irreversible"
+      ],
+      "title": "Recovery",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ActionSpec"
+      },
+      "title": "Actions",
+      "type": "object"
+    },
+    "connector": {
+      "title": "Connector",
+      "type": "string"
+    },
+    "hosts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Hosts",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "scopes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Scopes",
+      "type": "array",
+      "uniqueItems": true
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "connector",
+    "version",
+    "scopes",
+    "hosts",
+    "actions"
+  ],
+  "title": "ConnectorManifest",
+  "type": "object"
+}

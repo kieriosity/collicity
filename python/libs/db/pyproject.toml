@@ -1,0 +1,18 @@
+[project]
+name = "collicity-db"
+version = "0.1.0"
+description = "Database roles, tenant-scoped sessions (SEC-09), models and Alembic migrations"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "collicity-core",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "sqlalchemy>=2.0.36",
+]
+
+[tool.uv.sources]
+collicity-core = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
