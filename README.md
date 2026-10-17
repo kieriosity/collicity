@@ -10,6 +10,7 @@ The repository follows the technical design (§13). Only the parts built so far 
 ```text
 python/                uv workspace (Python 3.13)
   libs/core            identifiers, tenant context, log redaction (SEC-03)
+  libs/audit           write-ahead, hash-chained audit log with crypto-shredding (ADM-07, SEC-07)
   libs/db              database roles, tenant-scoped sessions (SEC-09), models, migrations
   libs/grants          the permission ceiling: manifests, capability grants, evaluator (CON-02)
   libs/ledger          price catalog, worst-case cost estimates, budget reservations (BUD-*)
@@ -68,6 +69,17 @@ reason, refuses security changes outright (SEC-16) and any action without a cost
 and escapes text so it can't become a spreadsheet formula. `filter_response` drops what a read
 returns outside the grant, and `widens` lists every way a new version grants more, which is what
 triggers re-acceptance (RUN-03).
+
+## Audit in one paragraph
+
+Every service writes audit records only through `audit.append`, in the same transaction as the
+work they describe (write-ahead), and nobody, migrator included, can update or delete one. A
+sealer links each tenant's records into a hash chain, and `audit.verify` recomputes every digest
+and link, so an edited, removed, reordered or truncated record shows. Records hold identifiers
+and hashes; personal fields are encrypted in the application under a per-person key, so
+destroying that key (crypto-shredding, SEC-07) erases them while the chain still verifies.
+Searchable personal fields get keyed-hash blind indexes outside the chain. Signed anchors in S3
+Object Lock, which catch a forger who rewrites the whole chain, come with the AWS work.
 
 ## Issue tracking
 
