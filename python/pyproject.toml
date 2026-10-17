@@ -9,6 +9,7 @@ dependencies = []
 dev = [
     "collicity-core",
     "collicity-db",
+    "collicity-grants",
     "collicity-ledger",
     "collicity-app",
     "collicity-testing",
@@ -29,6 +30,7 @@ members = ["libs/*", "services/*", "testing"]
 [tool.uv.sources]
 collicity-core = { workspace = true }
 collicity-db = { workspace = true }
+collicity-grants = { workspace = true }
 collicity-ledger = { workspace = true }
 collicity-app = { workspace = true }
 collicity-testing = { workspace = true }
@@ -47,7 +49,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**" = ["S101", "S105", "S106", "S311", "S608", "PLR0915"]
+"**/tests/**" = ["S101", "S105", "S106", "S311", "S608", "PLR0911", "PLR0912", "PLR0915"]
 "**/migrations/versions/*.py" = ["E501", "S608"]  # DDL built from constants
 
 [tool.ruff.lint.isort]

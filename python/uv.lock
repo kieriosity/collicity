@@ -7,6 +7,7 @@ members = [
     "collicity-app",
     "collicity-core",
     "collicity-db",
+    "collicity-grants",
     "collicity-ledger",
     "collicity-testing",
     "collicity-workspace",
@@ -175,6 +176,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "collicity-grants"
+version = "0.1.0"
+source = { editable = "libs/grants" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.10" }]
+
+[[package]]
 name = "collicity-ledger"
 version = "0.1.0"
 source = { editable = "libs/ledger" }
@@ -198,6 +210,7 @@ source = { editable = "testing" }
 dependencies = [
     { name = "collicity-core" },
     { name = "collicity-db" },
+    { name = "collicity-grants" },
     { name = "collicity-ledger" },
     { name = "pytest" },
     { name = "testcontainers" },
@@ -207,6 +220,7 @@ dependencies = [
 requires-dist = [
     { name = "collicity-core", editable = "libs/core" },
     { name = "collicity-db", editable = "libs/db" },
+    { name = "collicity-grants", editable = "libs/grants" },
     { name = "collicity-ledger", editable = "libs/ledger" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.9" },
@@ -222,6 +236,7 @@ dev = [
     { name = "collicity-app" },
     { name = "collicity-core" },
     { name = "collicity-db" },
+    { name = "collicity-grants" },
     { name = "collicity-ledger" },
     { name = "collicity-testing" },
     { name = "httpx2" },
@@ -239,6 +254,7 @@ dev = [
     { name = "collicity-app", editable = "services/app" },
     { name = "collicity-core", editable = "libs/core" },
     { name = "collicity-db", editable = "libs/db" },
+    { name = "collicity-grants", editable = "libs/grants" },
     { name = "collicity-ledger", editable = "libs/ledger" },
     { name = "collicity-testing", editable = "testing" },
     { name = "httpx2", specifier = ">=2.13" },

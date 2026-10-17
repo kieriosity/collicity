@@ -164,6 +164,10 @@ gateway holds credentials or reaches the internet. Postgres is the system of rec
   immutable versions; never hard-code a price.
 - Prove a concurrency claim with a test that forces the interleaving (see
   `libs/ledger/tests/test_concurrency.py`), then check that it fails with the protection removed.
+- Check that a property test isn't vacuous: break the code it guards and confirm it fails
+  (back up the files first, untracked ones included). See `libs/grants/tests/test_properties.py`.
+- Connector calls are decided only by `collicity_grants.evaluate`; widening a grant element means
+  updating `widens` and its tests together. Regenerate `schemas/` with `just schemas`.
 - Files are UTF-8. Some editors on this machine write UTF-16; check with `file` if unsure.
 - Never edit the spec or technical design in place; new drafts go in `docs/`, old ones to
   `docs/archive/`.

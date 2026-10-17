@@ -40,6 +40,10 @@ prices:
 prices-check:
     for f in catalog/prices/*.json; do {{py}} python -m collicity_ledger publish-prices --check "../$f"; done
 
+# Regenerate the JSON Schemas in schemas/ from the models
+schemas:
+    {{py}} python -m collicity_grants schemas ../schemas
+
 # Stop local services; `just db-down -v` also deletes the data
 db-down *args:
     docker compose down {{args}}
