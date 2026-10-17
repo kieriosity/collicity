@@ -5,6 +5,7 @@ of them. These mappings must match; ``tests/test_migrations.py`` fails when they
 """
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
@@ -14,12 +15,15 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
+    LargeBinary,
     MetaData,
     SmallInteger,
     Text,
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Postgres's own default names, so hand-written SQL and these mappings agree.
@@ -54,6 +58,8 @@ class Tenant(Base):
     epoch: Mapped[int]
     workos_organization_id: Mapped[str | None] = mapped_column(unique=True)
     created_at: Mapped[datetime]
+    runs_paused_at: Mapped[datetime | None]
+    runs_paused_by: Mapped[UUID | None]
 
 
 class Principal(Base):
@@ -75,6 +81,8 @@ class Principal(Base):
     display_name: Mapped[str]
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
+    runs_paused_at: Mapped[datetime | None]
+    runs_paused_by: Mapped[UUID | None]
 
 
 class RoleGrant(Base):
@@ -246,3 +254,119 @@ class LedgerEntry(Base):
     reserved_delta: Mapped[int]
     spent_delta: Mapped[int]
     created_at: Mapped[datetime]
+
+
+class Assignment(Base):
+    """A standing piece of work owned by a person. Its id is also its agent ID (MR-04)."""
+
+    __tablename__ = "assignment"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        ForeignKeyConstraint(["tenant_id", "owner_id"], ["principal.tenant_id", "principal.id"]),
+        ForeignKeyConstraint(
+            ["tenant_id", "id", "current_version_id"],
+            [
+                "assignment_version.tenant_id",
+                "assignment_version.assignment_id",
+                "assignment_version.id",
+            ],
+            use_alter=True,
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenant.id"))
+    owner_id: Mapped[UUID]
+    name: Mapped[str]
+    current_version_id: Mapped[UUID | None]
+    epoch: Mapped[int]
+    runs_paused_at: Mapped[datetime | None]
+    runs_paused_by: Mapped[UUID | None]
+    archived_at: Mapped[datetime | None]
+    created_at: Mapped[datetime]
+
+
+class AssignmentVersion(Base):
+    """An immutable version: capability grants, task graph and provenance (ASG-01, SEC-12)."""
+
+    __tablename__ = "assignment_version"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        UniqueConstraint("tenant_id", "assignment_id", "id"),
+        UniqueConstraint("assignment_id", "number"),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"], ["assignment.tenant_id", "assignment.id"]
+        ),
+        ForeignKeyConstraint(["tenant_id", "created_by"], ["principal.tenant_id", "principal.id"]),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    assignment_id: Mapped[UUID]
+    number: Mapped[int] = mapped_column(Integer)
+    grants: Mapped[Any] = mapped_column(JSONB)
+    task_graph: Mapped[Any] = mapped_column(JSONB)
+    taint: Mapped[str]
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary)
+    created_by: Mapped[UUID]
+    created_at: Mapped[datetime]
+
+
+class VersionAcceptance(Base):
+    """A person's acceptance of a version, with what it widened."""
+
+    __tablename__ = "version_acceptance"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id", "version_id"],
+            [
+                "assignment_version.tenant_id",
+                "assignment_version.assignment_id",
+                "assignment_version.id",
+            ],
+        ),
+        ForeignKeyConstraint(["tenant_id", "accepted_by"], ["principal.tenant_id", "principal.id"]),
+    )
+
+    version_id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    assignment_id: Mapped[UUID]
+    accepted_by: Mapped[UUID]
+    accepted_at: Mapped[datetime]
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary)
+    widening: Mapped[Any] = mapped_column(JSONB)
+
+
+class StepGrant(Base):
+    """A grant for one step and attempt, valid only while its recorded epochs are current."""
+
+    __tablename__ = "step_grant"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id", "version_id"],
+            [
+                "assignment_version.tenant_id",
+                "assignment_version.assignment_id",
+                "assignment_version.id",
+            ],
+        ),
+        ForeignKeyConstraint(["tenant_id", "owner_id"], ["principal.tenant_id", "principal.id"]),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    assignment_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    owner_id: Mapped[UUID]
+    run_id: Mapped[UUID | None]
+    step_key: Mapped[str]
+    attempt: Mapped[int] = mapped_column(Integer)
+    grants: Mapped[Any] = mapped_column(JSONB)
+    dry_run: Mapped[bool]
+    tenant_epoch: Mapped[int]
+    owner_epoch: Mapped[int]
+    assignment_epoch: Mapped[int]
+    issued_at: Mapped[datetime]
+    expires_at: Mapped[datetime]
+    ended_at: Mapped[datetime | None]
