@@ -11,10 +11,12 @@ The repository follows the technical design (§13). Only the parts built so far 
 python/                uv workspace (Python 3.13)
   libs/core            identifiers, tenant context, log redaction (SEC-03)
   libs/db              database roles, tenant-scoped sessions (SEC-09), models, migrations
+  libs/grants          the permission ceiling: manifests, capability grants, evaluator (CON-02)
   libs/ledger          price catalog, worst-case cost estimates, budget reservations (BUD-*)
   services/app         the app service: API for people (FastAPI)
   testing/             pytest plugin: migrated Postgres fixture; fakes and stubs later
 catalog/prices/        versioned price catalog files, published with `just prices`
+schemas/               JSON Schemas for manifests, grants and admin policy (`just schemas`)
 compose.yaml           local Postgres 17
 justfile               developer tasks
 docs/                  specification, technical design, archive
@@ -55,6 +57,17 @@ through those `SECURITY DEFINER` functions, which tenant RLS still binds, and gr
 by role: app and worker reserve, only the gateway starts and settles. Prices are integer
 micro-USD, come only from published, immutable catalog versions (BUD-08), and each reservation
 records the version it used.
+
+## Grants in one paragraph
+
+Before the gateway releases any credential, `collicity_grants.evaluate` checks the call against
+the permission ceiling (CON-02): the connector and action, the resources (stable IDs resolved at
+acceptance), the fields written, the recipients, parameter limits and the per-run volume, plus
+the admin's policy and the person's consented scopes. It denies by default and returns the first
+reason, refuses security changes outright (SEC-16) and any action without a cost model (BUD-03),
+and escapes text so it can't become a spreadsheet formula. `filter_response` drops what a read
+returns outside the grant, and `widens` lists every way a new version grants more, which is what
+triggers re-acceptance (RUN-03).
 
 ## Issue tracking
 
