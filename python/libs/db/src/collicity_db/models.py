@@ -284,6 +284,9 @@ class Assignment(Base):
     runs_paused_by: Mapped[UUID | None]
     archived_at: Mapped[datetime | None]
     created_at: Mapped[datetime]
+    concurrency_policy: Mapped[str]
+    max_running: Mapped[int] = mapped_column(Integer)
+    max_queued: Mapped[int] = mapped_column(Integer)
 
 
 class AssignmentVersion(Base):
@@ -352,6 +355,7 @@ class StepGrant(Base):
             ],
         ),
         ForeignKeyConstraint(["tenant_id", "owner_id"], ["principal.tenant_id", "principal.id"]),
+        ForeignKeyConstraint(["tenant_id", "run_id"], ["run.tenant_id", "run.id"]),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
@@ -370,3 +374,116 @@ class StepGrant(Base):
     issued_at: Mapped[datetime]
     expires_at: Mapped[datetime]
     ended_at: Mapped[datetime | None]
+    run_epoch: Mapped[int | None]
+
+
+class TriggerEvent(Base):
+    """One trigger event for one assignment; its dedup key is unique while kept (RUN-02)."""
+
+    __tablename__ = "trigger_event"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        UniqueConstraint("tenant_id", "assignment_id", "dedup_key"),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"], ["assignment.tenant_id", "assignment.id"]
+        ),
+        ForeignKeyConstraint(["tenant_id", "run_id"], ["run.tenant_id", "run.id"], use_alter=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    assignment_id: Mapped[UUID]
+    kind: Mapped[str]
+    dedup_key: Mapped[str]
+    event_at: Mapped[datetime | None]
+    received_at: Mapped[datetime]
+    keep_until: Mapped[datetime]
+    outcome: Mapped[str]
+    run_id: Mapped[UUID | None]
+
+
+class Run(Base):
+    """A run. Its state changes only through the runtime's functions (§4.1)."""
+
+    __tablename__ = "run"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id"], ["assignment.tenant_id", "assignment.id"]
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "assignment_id", "version_id"],
+            [
+                "assignment_version.tenant_id",
+                "assignment_version.assignment_id",
+                "assignment_version.id",
+            ],
+        ),
+        ForeignKeyConstraint(["tenant_id", "owner_id"], ["principal.tenant_id", "principal.id"]),
+        ForeignKeyConstraint(
+            ["tenant_id", "trigger_event_id"], ["trigger_event.tenant_id", "trigger_event.id"]
+        ),
+        Index("run_assignment_id_state_idx", "assignment_id", "state"),
+        Index(
+            "run_assignment_id_priority_created_at_idx",
+            "assignment_id",
+            text("priority DESC"),
+            "created_at",
+            "id",
+            postgresql_where=text("state = 'queued'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID]
+    assignment_id: Mapped[UUID]
+    version_id: Mapped[UUID | None]
+    owner_id: Mapped[UUID]
+    trigger_event_id: Mapped[UUID]
+    state: Mapped[str]
+    state_version: Mapped[int]
+    segment_no: Mapped[int] = mapped_column(Integer)
+    continuation: Mapped[Any] = mapped_column(JSONB)
+    priority: Mapped[int] = mapped_column(SmallInteger)
+    epoch: Mapped[int]
+    effects_applied: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime | None]
+    paused_at: Mapped[datetime | None]
+    paused_by: Mapped[UUID | None]
+    cancel_requested_at: Mapped[datetime | None]
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+    ended_at: Mapped[datetime | None]
+
+
+class OutboxEvent(Base):
+    """An event for the relay. ``seq`` is assigned at publish time, per tenant (§9)."""
+
+    __tablename__ = "outbox_event"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "seq"),
+        Index(
+            "outbox_event_tenant_id_created_at_idx",
+            "tenant_id",
+            "created_at",
+            "id",
+            postgresql_where=text("delivered_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenant.id"))
+    kind: Mapped[str]
+    subject_id: Mapped[UUID]
+    payload: Mapped[Any] = mapped_column(JSONB)
+    created_at: Mapped[datetime]
+    seq: Mapped[int | None]
+    published_at: Mapped[datetime | None]
+    delivered_at: Mapped[datetime | None]
+
+
+class OutboxCursor(Base):
+    __tablename__ = "outbox_cursor"
+
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenant.id"), primary_key=True)
+    last_seq: Mapped[int]

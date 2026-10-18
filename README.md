@@ -15,6 +15,7 @@ python/                uv workspace (Python 3.13)
   libs/db              database roles, tenant-scoped sessions (SEC-09), models, migrations
   libs/grants          the permission ceiling: manifests, capability grants, evaluator (CON-02)
   libs/ledger          price catalog, worst-case cost estimates, budget reservations (BUD-*)
+  libs/runs            run admission, state transitions, run kill switch, outbox relay
   services/app         the app service: API for people (FastAPI)
   testing/             pytest plugin: migrated Postgres fixture; fakes and stubs later
 catalog/prices/        versioned price catalog files, published with `just prices`
@@ -91,6 +92,18 @@ worker issues only from an accepted version. The database stamps it with the ten
 owner's and the assignment's current epochs. The gateway checks it before every call, and a
 pause (ASG-13) bumps the paused scope's epoch, so every earlier grant fails at once and a resume
 never revives it. Pauses are audited and announced on `collicity_epochs` for gateway caches.
+
+## Runs in one paragraph
+
+Postgres owns every run's state. Only admission creates runs (RUN-09): it drops duplicate
+triggers (RUN-02), applies the assignment's concurrency policy and starts runs that carry a
+decided approval first (RUN-01), and parks a run until a version is accepted (RUN-03). A run's
+state changes only through `runtime.transition`, which checks its version, allows only the §7.6
+moves, and refuses an outcome that misstates what the run did: no Cancelled or Failed after a
+side effect, no Rolled back without one (RUN-08). Every change writes outbox events in the same
+transaction; the relay numbers each tenant's events when it publishes them, so a late commit is
+never skipped, and delivers them at least once. Entering Running starts a new segment, which the
+Temporal worker (next) executes until the run next waits.
 
 ## Issue tracking
 

@@ -10,6 +10,7 @@ dependencies = [
     "collicity-db",
     "collicity-grants",
     "collicity-ledger",
+    "collicity-runs",
     "pytest>=8.3",
     "testcontainers[postgres]>=4.9",
 ]
@@ -24,6 +25,7 @@ collicity-audit = { workspace = true }
 collicity-db = { workspace = true }
 collicity-grants = { workspace = true }
 collicity-ledger = { workspace = true }
+collicity-runs = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]

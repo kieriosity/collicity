@@ -13,6 +13,7 @@ dev = [
     "collicity-db",
     "collicity-grants",
     "collicity-ledger",
+    "collicity-runs",
     "collicity-app",
     "collicity-testing",
     "hypothesis>=6.120",
@@ -36,6 +37,7 @@ collicity-audit = { workspace = true }
 collicity-db = { workspace = true }
 collicity-grants = { workspace = true }
 collicity-ledger = { workspace = true }
+collicity-runs = { workspace = true }
 collicity-app = { workspace = true }
 collicity-testing = { workspace = true }
 
