@@ -94,8 +94,15 @@ def test_a_removed_seal_leaves_a_gap(database: MigratedDatabase, audit_tenant: A
 def test_removing_the_newest_seals_is_found_at_the_head(
     database: MigratedDatabase, audit_tenant: AuditTenant
 ):
-    ids = _sealed_log(audit_tenant)
-    _tamper(database, "DELETE FROM audit.seal WHERE record_id = :r", r=ids[-1])
+    _sealed_log(audit_tenant)
+    # The newest seal by chain position, not the last record written: records written in the
+    # same millisecond have UUIDv7 ids in no particular order, and seals follow record ids.
+    _tamper(
+        database,
+        "DELETE FROM audit.seal WHERE tenant_id = :t AND chain_seq = :n",
+        t=audit_tenant.tenant.id,
+        n=RECORDS,
+    )
     assert _verify(audit_tenant) == ("head_mismatch", RECORDS - 1)
 
 

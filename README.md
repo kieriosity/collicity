@@ -17,10 +17,11 @@ python/                uv workspace (Python 3.13)
   libs/ledger          price catalog, worst-case cost estimates, budget reservations (BUD-*)
   libs/runs            run admission, state transitions, run kill switch, outbox relay
   services/app         the app service: API for people (FastAPI)
+  services/worker      the worker service: Temporal run segments and the outbox relay
   testing/             pytest plugin: migrated Postgres fixture; fakes and stubs later
 catalog/prices/        versioned price catalog files, published with `just prices`
 schemas/               JSON Schemas for manifests, grants and admin policy (`just schemas`)
-compose.yaml           local Postgres 17
+compose.yaml           local Postgres 17 and Temporal's dev server
 justfile               developer tasks
 docs/                  specification, technical design, archive
 ```
@@ -33,6 +34,7 @@ You need [uv](https://docs.astral.sh/uv/), [just](https://just.systems/) and Doc
 just sync          # install the Python workspace
 just dev           # start Postgres on 127.0.0.1:55432, create roles, migrate, publish prices
 just app           # serve the API on http://localhost:8000 (/docs, /readyz)
+just worker        # run segments and the relay (Temporal UI on http://localhost:8233)
 just check         # lint, types and tests, as CI runs them
 ```
 
@@ -102,8 +104,12 @@ state changes only through `runtime.transition`, which checks its version, allow
 moves, and refuses an outcome that misstates what the run did: no Cancelled or Failed after a
 side effect, no Rolled back without one (RUN-08). Every change writes outbox events in the same
 transaction; the relay numbers each tenant's events when it publishes them, so a late commit is
-never skipped, and delivers them at least once. Entering Running starts a new segment, which the
-Temporal worker (next) executes until the run next waits.
+never skipped, and delivers them at least once. Entering Running starts a new segment: the worker's
+relay starts Temporal workflow `run:{id}:{n}`, which alternates `next_step` and `execute_step`
+until the run waits, pauses or ends. Each step's database work commits with the checkpoint that
+moves the run past it, so a retried activity never repeats a step, and recorded histories in
+`services/worker/tests/histories` are replayed in CI so a workflow change can't break segments
+already in flight.
 
 ## Issue tracking
 

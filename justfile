@@ -12,6 +12,7 @@ export COLLICITY_ROLE_PASSWORD_APP_WORKER := env("COLLICITY_ROLE_PASSWORD_APP_WO
 export COLLICITY_ROLE_PASSWORD_GW := env("COLLICITY_ROLE_PASSWORD_GW", "gw-local-only")
 export COLLICITY_MIGRATOR_DATABASE_URL := env("COLLICITY_MIGRATOR_DATABASE_URL", "postgresql+psycopg://migrator:" + COLLICITY_ROLE_PASSWORD_MIGRATOR + "@127.0.0.1:55432/collicity")
 export COLLICITY_APP_DATABASE_URL := env("COLLICITY_APP_DATABASE_URL", "postgresql+psycopg://app_user:" + COLLICITY_ROLE_PASSWORD_APP_USER + "@127.0.0.1:55432/collicity")
+export COLLICITY_WORKER_DATABASE_URL := env("COLLICITY_WORKER_DATABASE_URL", "postgresql+psycopg://app_worker:" + COLLICITY_ROLE_PASSWORD_APP_WORKER + "@127.0.0.1:55432/collicity")
 
 default:
     @just --list
@@ -23,9 +24,9 @@ sync:
 # Start local services, create roles, migrate and publish prices
 dev: db-up db-migrate prices
 
-# Start Postgres and wait until it's healthy
+# Start Postgres and Temporal's dev server (UI on http://localhost:8233)
 db-up:
-    docker compose up -d --wait postgres
+    docker compose up -d --wait postgres temporal
 
 # Create roles and the database (idempotent), then apply migrations as migrator
 db-migrate:
@@ -51,6 +52,14 @@ db-down *args:
 # Serve the app API on http://localhost:8000
 app:
     {{py}} uvicorn --factory collicity_app.main:create_app --reload --port 8000
+
+# Run the worker: Temporal run segments and the outbox relay
+worker:
+    {{py}} python -m collicity_worker.main
+
+# Re-record the Temporal histories the replay tests use (after a deliberate workflow change)
+record-histories:
+    COLLICITY_RECORD_HISTORIES=1 {{py}} pytest services/worker -k record_histories
 
 # Run tests; extra arguments go to pytest
 test *args:
