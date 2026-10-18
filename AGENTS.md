@@ -171,6 +171,9 @@ gateway holds credentials or reaches the internet. Postgres is the system of rec
 - Before a connector call the gateway runs `collicity_assignments.check_step_grant`, then
   `evaluate(..., read_only=grant.dry_run)` with the grant's capabilities. Nothing else authorizes
   a call.
+- Step handlers do their database work on the connection they're given: it commits with the
+  run's checkpoint, which is what makes a retried step run once. Workflow code stays a thin
+  loop; logic goes in activities. A deliberate workflow change means `just record-histories`.
 - A run's state changes only through `runtime.transition` (or the runtime's own functions);
   never write `run` rows directly. Outbox handlers must be idempotent: delivery is at least once.
 - Connector calls are decided only by `collicity_grants.evaluate`; widening a grant element means

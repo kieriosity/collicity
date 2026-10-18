@@ -1,5 +1,5 @@
 # Local development services. `just dev` starts them, creates the roles and migrates.
-# Temporal's dev server, LocalStack (S3, KMS, Lambda) and the fakes join as their work packages land.
+# LocalStack (S3, KMS, Lambda) and the fakes join as their work packages land.
 name: collicity
 
 services:
@@ -18,6 +18,16 @@ services:
       retries: 30
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  temporal:
+    # Temporal Cloud over PrivateLink in AWS (technical design §2); the dev server locally.
+    # Its state lives in the container (the image runs as a non-root user): it survives a stop
+    # and resets on `docker compose down`. Run state is in Postgres either way.
+    image: temporalio/temporal:1.8.0
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/tmp/temporal.db"]
+    ports:
+      - "127.0.0.1:7233:7233"  # gRPC
+      - "127.0.0.1:8233:8233"  # web UI
 
 volumes:
   pgdata:
