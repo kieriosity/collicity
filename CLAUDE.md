@@ -102,6 +102,8 @@ gateway holds credentials or reaches the internet. Postgres is the system of rec
 - Before a connector call the gateway runs `collicity_assignments.check_step_grant`, then
   `evaluate(..., read_only=grant.dry_run)` with the grant's capabilities. Nothing else authorizes
   a call.
+- A run's state changes only through `runtime.transition` (or the runtime's own functions);
+  never write `run` rows directly. Outbox handlers must be idempotent: delivery is at least once.
 - Connector calls are decided only by `collicity_grants.evaluate`; widening a grant element means
   updating `widens` and its tests together. Regenerate `schemas/` with `just schemas`.
 - Files are UTF-8. Some editors on this machine write UTF-16; check with `file` if unsure.

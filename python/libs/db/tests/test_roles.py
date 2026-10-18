@@ -35,6 +35,7 @@ EXTRA_POLICIES = {
     ("pending", "sweeper_scan"): (["sweeper"], "SELECT", "PERMISSIVE"),
     ("assignment", "owner_creates"): (["app_user"], "INSERT", "RESTRICTIVE"),
     ("assignment_version", "owner_drafts"): (["app_user"], "INSERT", "RESTRICTIVE"),
+    ("outbox_event", "sweeper_scan"): (["sweeper"], "SELECT", "PERMISSIVE"),
 }
 
 _READ_TENANCY = {("tenant", "SELECT"), ("principal", "SELECT"), ("role_grant", "SELECT")}
@@ -50,8 +51,17 @@ _READ_STANDING = {
     ("version_acceptance", "SELECT"),
 }
 EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
-    "app_user": _READ_TENANCY | _READ_PRICES | _READ_LEDGER | _READ_AUDIT | _READ_STANDING,
-    "app_worker": _READ_TENANCY | _READ_PRICES | _READ_LEDGER | _READ_STANDING,
+    "app_user": _READ_TENANCY
+    | _READ_PRICES
+    | _READ_LEDGER
+    | _READ_AUDIT
+    | _READ_STANDING
+    | {("run", "SELECT")},
+    "app_worker": _READ_TENANCY
+    | _READ_PRICES
+    | _READ_LEDGER
+    | _READ_STANDING
+    | {("run", "SELECT"), ("trigger_event", "SELECT"), ("outbox_event", "SELECT")},
     "gw": _READ_TENANCY | _READ_PRICES | {("reservation", "SELECT")},
     "ledger_definer": {
         ("budget", "SELECT"),
@@ -79,7 +89,11 @@ EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
         }.items()
         for privilege in privileges
     },
-    "standing_definer": {("principal", "SELECT"), ("version_acceptance", "INSERT")}
+    "standing_definer": {
+        ("principal", "SELECT"),
+        ("version_acceptance", "INSERT"),
+        ("outbox_event", "INSERT"),
+    }
     | _READ_STANDING,
     "runtime_definer": {
         ("tenant", "SELECT"),
@@ -88,17 +102,32 @@ EXPECTED_TABLE_GRANTS: dict[str, set[tuple[str, str]]] = {
         ("step_grant", "SELECT"),
         ("step_grant", "INSERT"),
     }
-    | _READ_STANDING,
+    | _READ_STANDING
+    | {
+        (table, privilege)
+        for table in ("trigger_event", "run", "outbox_event", "outbox_cursor")
+        for privilege in ("SELECT", "INSERT", "UPDATE")
+    },
     "sweeper": set(),
 }
 EXPECTED_COLUMN_GRANTS: dict[str, set[tuple[str, str, str]]] = {
     "sweeper": {
         ("reservation", column, "SELECT") for column in ("id", "tenant_id", "state", "expires_at")
     }
-    | {("pending", "tenant_id", "SELECT")},
+    | {("pending", "tenant_id", "SELECT")}
+    | {("outbox_event", column, "SELECT") for column in ("tenant_id", "delivered_at")},
     # The app inserts drafts, never epochs, pauses or the current version.
     "app_user": {
-        ("assignment", column, "INSERT") for column in ("id", "tenant_id", "owner_id", "name")
+        ("assignment", column, "INSERT")
+        for column in (
+            "id",
+            "tenant_id",
+            "owner_id",
+            "name",
+            "concurrency_policy",
+            "max_running",
+            "max_queued",
+        )
     }
     | {
         ("assignment_version", column, "INSERT")
@@ -114,7 +143,11 @@ EXPECTED_COLUMN_GRANTS: dict[str, set[tuple[str, str, str]]] = {
         )
     },
     "standing_definer": {("assignment", "current_version_id", "UPDATE")},
-    "runtime_definer": {("step_grant", "ended_at", "UPDATE")}
+    "runtime_definer": {
+        ("step_grant", "ended_at", "UPDATE"),
+        ("step_grant", "run_epoch", "UPDATE"),
+        ("assignment", "current_version_id", "UPDATE"),
+    }
     | {
         (table, column, "UPDATE")
         for table in ("tenant", "principal", "assignment")
@@ -144,6 +177,10 @@ EXPECTED_EXECUTE: dict[str, set[str]] = {
         "runtime.resume_principal(uuid)",
         "runtime.pause_assignment(uuid)",
         "runtime.resume_assignment(uuid)",
+        "runtime.admit(uuid,uuid,uuid,text,text,timestamp with time zone,interval,smallint)",
+        "runtime.pause_run(uuid)",
+        "runtime.resume_run(uuid)",
+        "runtime.cancel_run(uuid)",
     },
     "app_worker": _CONTEXT
     | _AUDIT_WRITE
@@ -158,6 +195,12 @@ EXPECTED_EXECUTE: dict[str, set[str]] = {
         "sweep.tenants_with_unsealed_audit(integer)",
         "runtime.issue_step_grant(uuid,uuid,uuid,uuid,text,integer,text[],boolean,interval)",
         "runtime.end_step_grant(uuid)",
+        "runtime.admit(uuid,uuid,uuid,text,text,timestamp with time zone,interval,smallint)",
+        "runtime.transition(uuid,bigint,text,jsonb,text)",
+        "runtime.requeue_after_acceptance(uuid)",
+        "runtime.claim_outbox(integer)",
+        "runtime.mark_delivered(uuid[])",
+        "sweep.tenants_with_outbox(integer)",
     },
     "gw": _CONTEXT
     | _AUDIT_WRITE
@@ -446,6 +489,12 @@ def test_security_definer_functions_have_a_definer_owner_and_a_pinned_search_pat
         "gen_random_uuid(), 's', 1, '[]', false, 0, 0, 0, now())",
         "UPDATE step_grant SET ended_at = NULL",
         "UPDATE principal SET runs_paused_at = NULL",
+        # Runs change only through the runtime (RUN-09, §4.1).
+        "UPDATE run SET state = 'succeeded'",
+        "UPDATE run SET effects_applied = 0",
+        "DELETE FROM run",
+        "UPDATE outbox_event SET delivered_at = now()",
+        "DELETE FROM trigger_event",
         "CREATE FUNCTION runtime.sneaky() RETURNS int LANGUAGE sql AS 'SELECT 1'",
     ],
 )
@@ -511,6 +560,19 @@ _ID = "gen_random_uuid()"
         (Role.GW, "SELECT runtime.resume_tenant()"),
         (Role.APP_WORKER, f"SELECT runtime.resume_principal({_ID})"),
         (Role.APP_WORKER, "SELECT runtime.is_admin()"),
+        # The worker moves runs; people pause, resume and cancel them through the app.
+        (Role.APP_USER, f"SELECT runtime.transition({_ID}, 0, 'running', NULL, 'x')"),
+        (Role.GW, f"SELECT runtime.transition({_ID}, 0, 'running', NULL, 'x')"),
+        (Role.APP_WORKER, f"SELECT runtime.pause_run({_ID})"),
+        (Role.APP_WORKER, f"SELECT runtime.cancel_run({_ID})"),
+        (Role.APP_USER, "SELECT * FROM runtime.claim_outbox(10)"),
+        (Role.GW, "SELECT * FROM runtime.claim_outbox(10)"),
+        (
+            Role.GW,
+            f"SELECT * FROM runtime.admit({_ID}, {_ID}, {_ID}, 'manual', 'k', NULL, "
+            "'30 days', 0::smallint)",
+        ),
+        (Role.APP_WORKER, "SELECT runtime.move_run(NULL::run, 'running', NULL, 'x', NULL)"),
     ],
 )
 def test_ledger_functions_are_split_by_role(database: MigratedDatabase, role: Role, statement: str):

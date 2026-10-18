@@ -25,15 +25,34 @@ from collicity_grants.models import CapabilityGrant
 
 
 def create_assignment(
-    conn: Connection, *, owner_id: UUID, name: str, assignment_id: UUID | None = None
+    conn: Connection,
+    *,
+    owner_id: UUID,
+    name: str,
+    concurrency_policy: Literal["skip", "queue", "replace", "concurrent"] = "concurrent",
+    max_running: int = 5,
+    max_queued: int = 100,
+    assignment_id: UUID | None = None,
 ) -> UUID:
+    """Create an assignment owned by ``owner_id``, the signed-in person.
+
+    The concurrency policy (RUN-01) defaults to running up to 5 at once and queueing the rest.
+    """
     assignment_id = assignment_id or new_id()
     conn.execute(
         text(
-            "INSERT INTO assignment (id, tenant_id, owner_id, name) "
-            "VALUES (:id, current_tenant_id(), :owner, :name)"
+            "INSERT INTO assignment "
+            "(id, tenant_id, owner_id, name, concurrency_policy, max_running, max_queued) "
+            "VALUES (:id, current_tenant_id(), :owner, :name, :policy, :running, :queued)"
         ),
-        {"id": assignment_id, "owner": owner_id, "name": name},
+        {
+            "id": assignment_id,
+            "owner": owner_id,
+            "name": name,
+            "policy": concurrency_policy,
+            "running": max_running,
+            "queued": max_queued,
+        },
     )
     return assignment_id
 
@@ -121,6 +140,7 @@ class IssueStatus(StrEnum):
     OWNER_INACTIVE = "owner_inactive"
     OWNER_PAUSED = "owner_paused"
     ASSIGNMENT_PAUSED = "assignment_paused"
+    RUN_NOT_RUNNING = "run_not_running"
 
 
 class CheckStatus(StrEnum):
@@ -134,6 +154,8 @@ class CheckStatus(StrEnum):
     OWNER_INACTIVE = "owner_inactive"
     OWNER_PAUSED = "owner_paused"
     ASSIGNMENT_PAUSED = "assignment_paused"
+    RUN_PAUSED = "run_paused"
+    RUN_NOT_RUNNING = "run_not_running"
 
 
 @dataclass(frozen=True)
