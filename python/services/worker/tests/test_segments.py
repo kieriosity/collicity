@@ -394,8 +394,7 @@ async def test_record_histories(scene: Scene):
         handle = scene.env.client.get_workflow_handle(workflow_id(run, number))
         history = await handle.fetch_history()
         (HISTORIES / f"segment_{name}.json").write_text(
-            history.to_json(), encoding="utf-8", newline="
-"
+            history.to_json(), encoding="utf-8", newline="\n"
         )
 
 
