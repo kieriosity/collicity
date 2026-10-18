@@ -393,7 +393,10 @@ async def test_record_histories(scene: Scene):
     for number, name in ((1, "waits"), (2, "retries_then_fails")):
         handle = scene.env.client.get_workflow_handle(workflow_id(run, number))
         history = await handle.fetch_history()
-        (HISTORIES / f"segment_{name}.json").write_text(history.to_json(), encoding="utf-8")
+        (HISTORIES / f"segment_{name}.json").write_text(
+            history.to_json(), encoding="utf-8", newline="
+"
+        )
 
 
 async def test_recorded_histories_still_replay():
